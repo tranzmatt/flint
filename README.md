@@ -10,6 +10,9 @@ A **secure, local-first knowledge base** with AI-powered intelligence. Your note
 
 ---
 
+https://github.com/user-attachments/assets/dbd70229-1ea6-499c-9fdd-476cdb581a79
+
+---
 ## Features
 
 ### Note-Taking
