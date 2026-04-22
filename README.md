@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="" style="width: 50%; height: auto;">
+  <img src="public/flint-logo.png" style="width: 10%; height: auto;">
 </div>   
 
 
