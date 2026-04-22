@@ -60,7 +60,7 @@
 
 ### Install
 ```bash
-git clone https://github.com/yourusername/flint.git
+git clone https://github.com/Chintanpatel24/flint.git
 cd flint
 bash install.sh
 ```
