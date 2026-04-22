@@ -1,86 +1,58 @@
 #!/usr/bin/env bash
 set -e
 
-# ============================
-# Flint — Update Script v2
-# ============================
-
 BOLD='\033[1m'
 DIM='\033[2m'
 GREEN='\033[0;32m'
-RED='\033[0;31m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
+RED='\033[0;31m'
 NC='\033[0m'
 
 FLINT_DIR="$HOME/.flint"
-FLINT_APP="$FLINT_DIR/app"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo ""
-echo -e "${BOLD}⬡ Flint Update${NC}"
+echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${BOLD}  ⬡ Flint — Update${NC}"
+echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 
-# Check if Flint is installed
-if [ ! -d "$FLINT_APP" ]; then
-    echo -e "${RED}Flint is not installed. Run ${BOLD}bash install.sh${NC} first."
+# Check if installed
+if [ ! -d "$FLINT_DIR/app" ]; then
+    echo -e "${YELLOW}Flint is not installed. Run bash install.sh first.${NC}"
     exit 1
 fi
 
-# ---- Git-based update (if installed from git repo) ----
+# Check for changes
+echo -e "${BLUE}[1/3]${NC} Checking for updates..."
 
 if [ -d "$SCRIPT_DIR/.git" ]; then
-    echo -e "${BLUE}[1]${NC} Checking for updates from git repository..."
+    # Git-based update
+    OLD_COMMIT=$(git -C "$SCRIPT_DIR" rev-parse HEAD 2>/dev/null || echo "unknown")
+    git -C "$SCRIPT_DIR" fetch origin main 2>/dev/null || git -C "$SCRIPT_DIR" fetch origin 2>/dev/null || true
+    NEW_COMMIT=$(git -C "$SCRIPT_DIR" rev-parse origin/main 2>/dev/null || echo "$OLD_COMMIT")
 
-    cd "$SCRIPT_DIR"
-
-    # Get current commit
-    CURRENT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
-
-    # Fetch latest
-    git fetch origin 2>/dev/null || {
-        echo -e "${RED}Failed to fetch from remote. Check your internet connection.${NC}"
-        exit 1
-    }
-
-    # Get remote commit
-    REMOTE=$(git rev-parse origin/HEAD 2>/dev/null || git rev-parse @{u} 2>/dev/null || echo "unknown")
-
-    if [ "$CURRENT" = "$REMOTE" ]; then
-        echo ""
-        echo -e "${GREEN}  ✓ App is up to date${NC}"
-        echo -e "  ${DIM}Commit: $(echo $CURRENT | cut -c1-8)${NC}"
+    if [ "$OLD_COMMIT" = "$NEW_COMMIT" ]; then
+        echo -e "      ${GREEN}App is up to date${NC}"
         echo ""
         exit 0
     fi
 
-    echo -e "      ${DIM}New version available!${NC}"
-    echo -e "      ${DIM}Current: $(echo $CURRENT | cut -c1-8)${NC}"
-    echo -e "      ${DIM}Latest:  $(echo $REMOTE | cut -c1-8)${NC}"
-
-    # Pull changes
-    echo -e "      ${DIM}Pulling changes...${NC}"
-    git pull origin HEAD || {
-        echo -e "${RED}Failed to pull changes.${NC}"
-        exit 1
-    }
-
-# ---- Source-based update (if files changed manually) ----
-
+    echo -e "      ${DIM}Changes detected. Updating...${NC}"
+    git -C "$SCRIPT_DIR" pull origin main 2>/dev/null || git -C "$SCRIPT_DIR" pull 2>/dev/null || true
 else
-    echo -e "${BLUE}[1]${NC} Checking source files..."
-    echo -e "      ${DIM}Not a git repo — will rebuild from current source.${NC}"
+    # Source directory update — just rebuild
+    echo -e "      ${DIM}Rebuilding from source directory...${NC}"
 fi
 
-# ---- Rebuild ----
-
-echo -e "${BLUE}[2]${NC} Rebuilding Flint..."
+# Rebuild
+echo -e "${BLUE}[2/3]${NC} Rebuilding..."
 
 BUILD_DIR="$FLINT_DIR/.build"
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
-# Copy source files
 for item in "$SCRIPT_DIR"/*; do
     name=$(basename "$item")
     case "$name" in
@@ -90,46 +62,47 @@ for item in "$SCRIPT_DIR"/*; do
 done
 
 cd "$BUILD_DIR"
-
-echo -e "      ${DIM}Installing dependencies...${NC}"
 npm install --loglevel=error 2>/dev/null || npm install
-
-echo -e "      ${DIM}Building...${NC}"
 npm run build
 
 if [ ! -f "$BUILD_DIR/dist/index.html" ]; then
-    echo -e "${RED}Build failed.${NC}"
+    echo -e "${RED}Build failed!${NC}"
     exit 1
 fi
 
-# Update the app directory — preserve node_modules (Electron)
-echo -e "      ${DIM}Updating app files...${NC}"
+# Copy new dist
+rm -rf "$FLINT_DIR/app/dist"
+cp -r "$BUILD_DIR/dist" "$FLINT_DIR/app/dist"
 
-# Only update dist and main.cjs, keep node_modules
-rm -rf "$FLINT_APP/dist"
-cp -r "$BUILD_DIR/dist" "$FLINT_APP/dist"
-cp "$BUILD_DIR/electron/main.cjs" "$FLINT_APP/main.cjs"
-
-if [ -f "$BUILD_DIR/public/flint-logo.png" ]; then
-    cp "$BUILD_DIR/public/flint-logo.png" "$FLINT_APP/icon.png"
-    cp "$BUILD_DIR/public/flint-logo.png" "$FLINT_DIR/icon.png"
+# Copy new agent
+if [ -d "$BUILD_DIR/agent" ]; then
+    rm -rf "$FLINT_DIR/agent"
+    cp -r "$BUILD_DIR/agent" "$FLINT_DIR/agent"
+    cp -r "$BUILD_DIR/agent" "$FLINT_DIR/app/agent"
 fi
 
-# Clean up
+# Copy new Electron main
+if [ -f "$BUILD_DIR/electron/main.cjs" ]; then
+    cp "$BUILD_DIR/electron/main.cjs" "$FLINT_DIR/app/main.cjs"
+fi
+
 rm -rf "$BUILD_DIR"
 
-echo -e "      ${GREEN}✓${NC} Updated"
+echo -e "      ${GREEN}✓${NC} Build complete"
 
-# ---- Check Electron still installed ----
-
-if [ ! -d "$FLINT_APP/node_modules/electron" ]; then
-    echo -e "      ${DIM}Re-installing Electron...${NC}"
-    cd "$FLINT_APP"
-    npm install electron --save-dev --loglevel=error 2>/dev/null || npm install electron --save-dev
+# Restart agent if running
+echo -e "${BLUE}[3/3]${NC} Restarting AI Agent..."
+if [ -f "/tmp/flint-agent-$(id -u).pid" ]; then
+    OLD_PID=$(cat "/tmp/flint-agent-$(id -u).pid" 2>/dev/null)
+    kill "$OLD_PID" 2>/dev/null || true
+    rm -f "/tmp/flint-agent-$(id -u).pid"
+    echo -e "      ${DIM}Agent stopped. It will restart with Flint.${NC}"
 fi
 
 echo ""
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${GREEN}  ✓ Flint updated successfully!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
+echo -e "  Run ${BOLD}flint${NC} to start the updated version."
 echo ""

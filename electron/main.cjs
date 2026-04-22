@@ -1,25 +1,77 @@
 // Flint — Electron Desktop Wrapper
-// This file uses CommonJS (require) intentionally.
-// The .cjs extension ensures Node treats it as CommonJS
-// regardless of any "type":"module" in parent package.json files.
+// .cjs = guaranteed CommonJS regardless of any "type":"module"
 
 const { app, BrowserWindow, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 
 let mainWindow = null;
+let agentProcess = null;
 
-// Resolve paths relative to THIS file's directory
 const APP_DIR = __dirname;
 const DIST_FILE = path.join(APP_DIR, 'dist', 'index.html');
 const ICON_FILE = path.join(APP_DIR, 'icon.png');
 
+// ── Start Python AI Agent ──────────────────────────────────
+function startAgent() {
+  const agentDir = path.join(APP_DIR, 'agent');
+  const agentScript = path.join(agentDir, 'agent.py');
+
+  if (!fs.existsSync(agentScript)) {
+    console.log('[Flint] No agent found — AI will use browser fallback');
+    return;
+  }
+
+  console.log('[Flint] Starting Python AI agent...');
+
+  // Try python3 first, then python
+  const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+
+  agentProcess = spawn(pythonCmd, [agentScript], {
+    cwd: agentDir,
+    env: { ...process.env },
+    stdio: ['pipe', 'pipe', 'pipe'],
+    detached: false,
+  });
+
+  agentProcess.stdout.on('data', (data) => {
+    const msg = data.toString().trim();
+    if (msg) console.log('[Flint Agent]', msg);
+  });
+
+  agentProcess.stderr.on('data', (data) => {
+    const msg = data.toString().trim();
+    if (msg && !msg.includes('DeprecationWarning') && !msg.includes('WARNING')) {
+      console.log('[Flint Agent]', msg);
+    }
+  });
+
+  agentProcess.on('error', (err) => {
+    console.log('[Flint] Agent failed to start:', err.message);
+    console.log('[Flint] Install Python + Flask: pip3 install flask flask-cors requests');
+  });
+
+  agentProcess.on('exit', (code) => {
+    console.log('[Flint] Agent stopped (code', code, ')');
+    agentProcess = null;
+  });
+}
+
+function stopAgent() {
+  if (agentProcess) {
+    console.log('[Flint] Stopping agent...');
+    agentProcess.kill('SIGTERM');
+    agentProcess = null;
+  }
+}
+
+// ── Create Window ──────────────────────────────────────────
+
 function createWindow() {
-  // Check dist exists before creating window
   if (!fs.existsSync(DIST_FILE)) {
     console.error('[Flint] ERROR: dist/index.html not found at ' + DIST_FILE);
-    console.error('[Flint] The web app was not built correctly.');
-    console.error('[Flint] Try running: bash install.sh');
+    console.error('[Flint] Run: bash install.sh');
     app.quit();
     return;
   }
@@ -41,17 +93,14 @@ function createWindow() {
     },
   });
 
-  // Remove default menu bar
   Menu.setApplicationMenu(null);
 
-  // Load the built web app
   mainWindow.loadFile(DIST_FILE).then(() => {
     console.log('[Flint] Loaded successfully');
   }).catch(err => {
     console.error('[Flint] Failed to load:', err.message);
   });
 
-  // Show window only when content is ready (no blank flash)
   mainWindow.once('ready-to-show', () => {
     if (mainWindow) {
       mainWindow.show();
@@ -59,7 +108,6 @@ function createWindow() {
     }
   });
 
-  // Open external links in system browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) {
       return { action: 'allow' };
@@ -73,7 +121,8 @@ function createWindow() {
   });
 }
 
-// Single instance lock
+// ── App Lifecycle ──────────────────────────────────────────
+
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
@@ -86,20 +135,22 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
+    // Start Python agent before creating window
+    startAgent();
     createWindow();
     console.log('[Flint] App ready — desktop mode');
   });
 
   app.on('window-all-closed', () => {
+    stopAgent();
     app.quit();
+  });
+
+  app.on('before-quit', () => {
+    stopAgent();
   });
 
   app.on('activate', () => {
     if (mainWindow === null) createWindow();
   });
 }
-
-// Graceful error handling
-process.on('uncaughtException', (err) => {
-  console.error('[Flint] Uncaught exception:', err.message);
-});

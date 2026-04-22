@@ -1,18 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useStore } from '../store';
+import { FlintLogo } from './FlintLogo';
 import { X, ZoomIn, ZoomOut, RotateCcw, Play, Pause, Search } from 'lucide-react';
-
-function StoneLogoSmall({ size = 14 }: { size?: number }) {
-  return (
-    <svg viewBox="0 0 100 120" width={size} height={size * 1.2} fill="none">
-      <ellipse cx="50" cy="65" rx="35" ry="45" fill="#2a2a2a" />
-      <ellipse cx="50" cy="63" rx="32" ry="42" fill="#1a1a1a" />
-      <path d="M35 45 L45 65 L40 85 L50 95" stroke="#333" strokeWidth="2" fill="none" strokeLinecap="round" />
-      <path d="M45 65 L60 72 L68 85" stroke="#333" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-      <circle cx="65" cy="50" r="2.5" fill="#e8a030" />
-    </svg>
-  );
-}
 
 interface GNode { id: string; title: string; x: number; y: number; vx: number; vy: number; conns: number; }
 interface GEdge { from: string; to: string; }
@@ -423,7 +412,7 @@ export function GraphView() {
       {/* Header */}
       <div className="flex items-center justify-between" style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '10px 16px', background: 'rgba(5,5,5,0.92)', borderBottom: '1px solid #111' }}>
         <div className="flex items-center gap-3">
-          <StoneLogoSmall size={14} />
+          <FlintLogo size={14} />
           <span style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>Graph View</span>
           <span style={{ fontSize: 10, color: '#333', background: '#0a0a0a', padding: '2px 8px', borderRadius: 4, border: '1px solid #151515' }}>
             {graphStats.nodes} nodes · {graphStats.edges} links

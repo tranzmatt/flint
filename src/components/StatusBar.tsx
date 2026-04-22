@@ -1,17 +1,6 @@
 import { useStore } from '../store';
 import { HardDrive } from 'lucide-react';
-
-function StoneLogoTiny({ size = 10 }: { size?: number }) {
-  return (
-    <svg viewBox="0 0 100 120" width={size} height={size * 1.2} fill="none" style={{ opacity: 0.4 }}>
-      <ellipse cx="50" cy="65" rx="35" ry="45" fill="#2a2a2a" />
-      <ellipse cx="50" cy="63" rx="32" ry="42" fill="#1a1a1a" />
-      <path d="M35 45 L45 65 L40 85 L50 95" stroke="#333" strokeWidth="2" fill="none" strokeLinecap="round" />
-      <path d="M45 65 L60 72 L68 85" stroke="#333" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-      <circle cx="65" cy="50" r="2.5" fill="#e8a030" />
-    </svg>
-  );
-}
+import { FlintLogo } from './FlintLogo';
 
 export function StatusBar() {
   const { state } = useStore();
@@ -35,7 +24,7 @@ export function StatusBar() {
       <div className="flex items-center gap-4">
         <span style={{ color: '#444' }}>Auto-save ✓</span>
         <div className="flex items-center gap-1">
-          <StoneLogoTiny size={10} />
+          <FlintLogo size={10} />
           <span style={{ color: '#333' }}>Flint v1.0</span>
         </div>
       </div>

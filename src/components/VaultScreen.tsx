@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../store';
 import { Plus, Trash2, Lock, FolderOpen, Folder, AlertCircle } from 'lucide-react';
+import { FlintLogo, FlintLogoLarge } from './FlintLogo';
 import {
   isFileSystemSupported,
   readAllMarkdownFiles,
@@ -9,22 +10,6 @@ import {
   getHandle,
 } from '../services/filesystem';
 import type { Note, Folder as FolderType } from '../types';
-
-function StoneLogo({ size = 60 }: { size?: number }) {
-  return (
-    <svg viewBox="0 0 100 120" width={size} height={size * 1.2} fill="none">
-      <ellipse cx="50" cy="65" rx="35" ry="45" fill="#2a2a2a" />
-      <ellipse cx="50" cy="63" rx="32" ry="42" fill="#1a1a1a" />
-      <ellipse cx="40" cy="40" rx="14" ry="8" fill="#2a2a2a" opacity="0.7" transform="rotate(-15 40 40)" />
-      <path d="M35 45 L45 65 L40 85 L50 95" stroke="#333" strokeWidth="2" fill="none" strokeLinecap="round" />
-      <path d="M45 65 L60 72 L68 85" stroke="#333" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-      <circle cx="65" cy="50" r="2.5" fill="#e8a030" />
-      <circle cx="65" cy="50" r="4" fill="#e8a030" opacity="0.3" />
-      <line x1="65" y1="43" x2="65" y2="38" stroke="#e8a030" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="70" y1="47" x2="74" y2="44" stroke="#e8a030" strokeWidth="1" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 // showDirectoryPicker is declared in src/types/fs.d.ts
 
@@ -201,7 +186,7 @@ export function VaultScreen() {
         {/* Logo */}
         <div className="text-center" style={{ marginBottom: 40 }}>
           <div style={{ width: 80, height: 96, margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <StoneLogo size={60} />
+            <FlintLogoLarge size={60} />
           </div>
           <h1 style={{ fontSize: 32, fontWeight: 700, color: '#e0e0e0', letterSpacing: '-0.03em' }}>Flint</h1>
           <p style={{ fontSize: 13, color: '#555', marginTop: 4 }}>Local knowledge base</p>
@@ -236,7 +221,7 @@ export function VaultScreen() {
                   }
                 }}>
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: '#141414', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #222' }}>
-                  {vault.isFolderVault ? <FolderOpen size={14} style={{ color: '#666' }} /> : <StoneLogo size={16} />}
+                  {vault.isFolderVault ? <FolderOpen size={14} style={{ color: '#666' }} /> : <FlintLogo size={16} />}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 500, color: '#ccc' }}>{vault.name}</div>

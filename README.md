@@ -1,195 +1,194 @@
-<div align=center>
-<img src="public/flint-logo.png" alt="Flint Logo" width="100" height="100">   
-</div>
+# ⬡ Flint
 
-# Flint
+A **secure, local-first knowledge base** with AI-powered intelligence. Your notes, your graph, your AI — all running locally on your machine.
 
-**Secure, local-first knowledge base — a web-based Obsidian clone with AI.**
-
-
+![Flint](public/flint-logo.png)
 
 ---
 
-## Features
+## ✨ Features
 
-### 📝 Markdown Editor
-- Full markdown editing with live preview
-- Wiki-style `[[links]]` between notes
-- Working formatting toolbar (Bold, Italic, Heading, Quote, Code, Link, List, Tag)
-- Auto-save (600ms debounced)
-- Split view (edit + preview side-by-side)
+### 📝 Note-Taking
+- Full **Markdown** support with live preview
+- **Wiki Links** (`[[Note Name]]`) to connect notes
+- **Tags** (`#tag`) for categorization
+- **Auto-save** with 600ms debounce
+- Split view (Editor + Preview)
+- Formatting toolbar (Bold, Italic, Heading, Quote, Code, Links, Lists)
 
-### 📁 Vault System
-- File explorer with folders and notes
-- Create, rename, delete notes and folders
-- Pin important notes
-- Context menus on right-click
-- All data stored in localStorage (private, no cloud)
-
-### 🔗 Knowledge Graph
-- Interactive force-directed graph of all note connections
+### 📊 Graph View
+- Interactive **force-directed graph** visualization
 - Node size scales with connection count
-- Drag nodes to rearrange (connected nodes follow via physics)
-- Zoom, pan, double-click to re-center
-- Physics simulation with pause/resume
+- Physics simulation — drag nodes, connected notes follow
+- Zoom, pan, search, depth filter
+- Curved edges between connected notes
 
-### 🧠 AI Assistant (Ollama)
-- Chat with AI about your notes
-- Notes serve as AI memory — graph connections provide context
-- Uses locally-hosted Ollama (no data leaves your machine)
-- Streaming responses in real-time
-- Configure model, temperature, context size in Settings → AI
+### 🧠 AI Agent (Python + Ollama)
+- **Real Python backend** that connects to Ollama locally
+- **Notes = Memory** — AI reads all your notes and graph connections
+- **Internet access** — AI searches Wikipedia for real-time info
+- **Works with ANY Ollama model** — llama3.2, mistral, codellama, phi3, etc.
+- **Streaming responses** in real-time
+- **Browser fallback** when agent is not running
 
-### ⚙️ Settings
-- Editor: font size, tab size, word wrap, auto-save, spell check
-- AI: Ollama URL, model, temperature, context notes, system prompt
-- About: version info
-
-### 🎨 Pure Black Theme
-- Deep matte black interface (`#0a0a0a`)
-- Obsidian-style three-panel layout
-- 48px ribbon + sidebar + editor + right panel
-- No purple, no blue — pure grayscale
+### 🔒 Local & Secure
+- **No cloud, no tracking** — all data stays on your device
+- **localStorage** for persistence
+- **No external API calls** (except Wikipedia when internet access is enabled)
+- **File System Access API** to open any local folder as a vault
 
 ---
 
-## Install as Desktop App
+## 🚀 Installation
 
 ### Prerequisites
-- **Node.js 18+** — [Install here](https://nodejs.org)
+- **Node.js** 18+ — [Install](https://nodejs.org)
+- **Python 3** (for AI Agent) — `sudo apt install python3 python3-pip`
+- **Ollama** (for AI) — [Install](https://ollama.ai) then `ollama pull llama3.2`
 
 ### Install
 ```bash
-git clone https://github.com/Chintanpatel24/flint.git
+git clone https://github.com/your-username/flint.git
 cd flint
 bash install.sh
 ```
 
-After install, Flint appears in your **app menu** as a native desktop application.
-
-### Run from terminal
+### One-liner
 ```bash
-flint
+bash <(curl -sL https://raw.githubusercontent.com/your-username/flint/main/install.sh)
 ```
 
-### Update
-```bash
-cd flint
-bash update.sh
-```
-If nothing changed, prints: **"App is up to date"**
-
-### Uninstall
-```bash
-bash uninstall.sh
-```
-Option to keep or remove vault data.
+After install, Flint appears in your **app menu**. Or run `flint` from terminal.
 
 ---
 
-## Keyboard Shortcuts
+## 🎮 Usage
 
+### Commands
+| Command | Description |
+|---------|-------------|
+| `flint` | Launch Flint desktop app |
+| `flint-agent` | Start AI agent only (for browser mode) |
+| `bash update.sh` | Check for updates and rebuild |
+| `bash uninstall.sh` | Remove Flint from system |
+
+### Keyboard Shortcuts
 | Shortcut | Action |
 |----------|--------|
 | `Ctrl+N` | New note |
 | `Ctrl+E` | Cycle view mode (Edit → Preview → Split) |
 | `Ctrl+G` | Graph view |
 | `Ctrl+P` | Command palette |
-| `Ctrl+J` | AI chat panel |
 | `Ctrl+Shift+F` | Search notes |
+| `Ctrl+J` | Toggle AI chat |
 | `Ctrl+\` | Toggle sidebar |
 | `Ctrl+,` | Settings |
-| `Ctrl+S` | Force save |
+
+### AI Agent
+The Python agent runs automatically when Flint starts (Electron mode).
+
+For browser mode, start it manually:
+```bash
+flint-agent
+# or: python3 ~/.flint/agent/agent.py
+```
+
+Install an Ollama model:
+```bash
+ollama pull llama3.2    # Small, fast
+ollama pull mistral     # Good balance
+ollama pull codellama   # Code-focused
+```
 
 ---
 
-## How It Works
+## 🏗️ Architecture
 
-### Desktop App Architecture
-```
-~/.flint/
-├── app/                    # Isolated Electron app
-│   ├── package.json        # NO "type":"module" (avoids ESM conflicts)
-│   ├── main.cjs            # Electron main process (CommonJS)
-│   ├── dist/               # Built web app (single HTML file)
-│   │   └── index.html
-│   └── node_modules/       # Electron only
-│       └── electron/
-├── flint                   # Launcher script
-└── icon.png                # Desktop icon
-```
-
-### Why `.cjs`?
-The web app uses Vite with `"type": "module"` in `package.json`. Electron's main process uses `require()` (CommonJS). The `.cjs` extension forces CommonJS mode, and the Electron app lives in its own directory with no `"type"` field — completely eliminating ESM/CJS conflicts.
-
-### AI Memory System
 ```
 User asks question
        ↓
-Build graph from [[wiki links]]
+┌──────────────────────────────┐
+│  Python Agent (port 5100)     │
+│  ├─ Receives query + notes    │
+│  ├─ Builds knowledge graph    │
+│  ├─ Scores notes by relevance │
+│  ├─ Expands to neighbors      │
+│  ├─ Searches Wikipedia (opt)  │
+│  ├─ Sends to Ollama           │
+│  └─ Streams response back     │
+└──────────────────────────────┘
        ↓
-Score notes by keywords + graph proximity
-       ↓
-Expand to 1-hop neighbor notes
-       ↓
-Send context + history to Ollama
-       ↓
-Stream response to chat UI
+   Browser renders in chat UI
 ```
 
-### Data Storage
-All notes, folders, settings, and vault data stored in **localStorage**. Nothing leaves your machine. No server, no cloud, no tracking.
-
 ---
 
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| UI | React 19 + TypeScript |
-| Build | Vite 7 (single-file output) |
-| Styling | Tailwind CSS 4 |
-| Desktop | Electron |
-| AI | Ollama (local LLM) |
-| Icons | Lucide React |
-
----
-
-## Project Structure
+## 📁 Project Structure
 
 ```
 flint/
 ├── src/
-│   ├── App.tsx              # Main layout + command palette
-│   ├── store.tsx            # State management (useReducer + Context)
-│   ├── types.ts             # TypeScript types
-│   ├── index.css            # Global styles
 │   ├── components/
-│   │   ├── Sidebar.tsx      # File explorer
-│   │   ├── TabBar.tsx       # Open note tabs
-│   │   ├── Editor.tsx       # Markdown editor
-│   │   ├── Preview.tsx      # Markdown preview
-│   │   ├── GraphView.tsx    # Knowledge graph
-│   │   ├── SearchModal.tsx  # Search across notes
-│   │   ├── StatusBar.tsx    # Bottom status bar
-│   │   ├── BacklinksPanel.tsx # Right panel
-│   │   ├── VaultScreen.tsx  # Vault selector
-│   │   ├── Settings.tsx     # Settings panel
-│   │   └── AIChat.tsx       # AI chat panel
-│   └── services/
-│       └── ollama.ts        # Ollama API client
+│   │   ├── AIChat.tsx         # AI chat panel
+│   │   ├── Editor.tsx         # Markdown editor
+│   │   ├── GraphView.tsx      # Interactive graph
+│   │   ├── Sidebar.tsx        # File explorer
+│   │   ├── Preview.tsx        # Markdown preview
+│   │   ├── Settings.tsx       # Settings panel
+│   │   ├── VaultScreen.tsx    # Vault selection
+│   │   └── ...
+│   ├── services/
+│   │   └── ollama.ts          # Agent API client
+│   ├── store.tsx              # State management
+│   ├── types.ts               # TypeScript types
+│   └── App.tsx                # Main layout
+├── agent/
+│   ├── agent.py               # Python AI agent server
+│   └── requirements.txt       # Python dependencies
 ├── electron/
-│   └── main.cjs             # Electron main process
-├── public/
-│   └── flint-logo.png       # App icon
-├── install.sh               # Desktop installer
-├── update.sh                # Update checker
-├── uninstall.sh             # Uninstaller
-└── package.json
+│   └── main.cjs               # Electron desktop wrapper
+├── install.sh                 # Installer
+├── update.sh                  # Updater
+└── uninstall.sh               # Uninstaller
 ```
 
 ---
 
-## License
+## 📦 Installed Location
+
+After `bash install.sh`:
+```
+~/.flint/
+├── app/                    # Electron app
+│   ├── main.cjs            # Desktop wrapper
+│   ├── dist/               # Built web app
+│   ├── agent/              # Python agent
+│   └── node_modules/       # Electron
+├── agent/                  # Standalone agent
+│   ├── agent.py
+│   └── requirements.txt
+├── icons/                  # App icons
+├── flint                   # Launcher script
+└── flint-agent             # Agent launcher
+```
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React + TypeScript + Tailwind CSS |
+| Build | Vite (single-file output) |
+| State | useReducer + Context |
+| Desktop | Electron |
+| AI Agent | Python + Flask |
+| AI Engine | Ollama (any model) |
+| Web Search | Wikipedia API |
+| Storage | localStorage (browser) |
+
+---
+
+## 📄 License
 
 MIT

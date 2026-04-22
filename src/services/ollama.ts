@@ -1,381 +1,128 @@
 import type { Note, AISettings } from '../types';
 
 // ============================================================
-// Flint AI — Memory + Internet Access
-// Notes = memory, Graph = connections, Web = internet
+// Flint AI Service — 3-Level Fallback
+// 1. Python Agent (localhost:5100) → full AI + web + memory
+// 2. Direct Ollama (localhost:11434) → AI only
+// 3. Browser built-in → note search only
 // ============================================================
 
-interface GraphNode {
-  id: string;
-  title: string;
-  connections: Set<string>;
-  centrality: number;
+const AGENT_URL = 'http://localhost:5100';
+const DEFAULT_OLLAMA = 'http://localhost:11434';
+
+function timeout(ms: number) {
+  return new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('timeout')), ms)
+  );
 }
 
-// Build a knowledge graph from all notes and their [[wiki links]]
-function buildKnowledgeGraph(notes: Note[]): Map<string, GraphNode> {
-  const graph = new Map<string, GraphNode>();
-  notes.forEach(n => {
-    graph.set(n.id, { id: n.id, title: n.title, connections: new Set(), centrality: 0 });
-  });
+// ── Status Checks ──────────────────────────────────────────
+
+export async function checkOllamaStatus(url: string): Promise<'connected' | 'disconnected'> {
+  try {
+    const res = await Promise.race([
+      fetch(`${AGENT_URL}/status`, { method: 'GET' }),
+      timeout(3000),
+    ]);
+    const data = await (res as Response).json();
+    return data.status === 'connected' ? 'connected' : 'disconnected';
+  } catch {
+    // Try direct Ollama
+    try {
+      const ollamaUrl = url || DEFAULT_OLLAMA;
+      const res = await Promise.race([
+        fetch(`${ollamaUrl}/api/tags`, { method: 'GET' }),
+        timeout(3000),
+      ]);
+      return (res as Response).ok ? 'connected' : 'disconnected';
+    } catch {
+      return 'disconnected';
+    }
+  }
+}
+
+export async function fetchOllamaModels(url: string): Promise<string[]> {
+  // Try agent first
+  try {
+    const res = await Promise.race([
+      fetch(`${AGENT_URL}/models`),
+      timeout(3000),
+    ]);
+    const data = await (res as Response).json();
+    if (data.models && data.models.length > 0) return data.models;
+  } catch { /* agent not running */ }
+
+  // Try direct Ollama
+  try {
+    const ollamaUrl = url || DEFAULT_OLLAMA;
+    const res = await Promise.race([
+      fetch(`${ollamaUrl}/api/tags`),
+      timeout(3000),
+    ]);
+    if ((res as Response).ok) {
+      const data = await (res as Response).json();
+      return (data.models || []).map((m: { name: string }) => m.name);
+    }
+  } catch { /* ollama not running */ }
+
+  return [];
+}
+
+export async function checkAgentStatus(): Promise<boolean> {
+  try {
+    const res = await Promise.race([
+      fetch(`${AGENT_URL}/status`),
+      timeout(2000),
+    ]);
+    return (res as Response).ok;
+  } catch {
+    return false;
+  }
+}
+
+// ── Memory Context Preview ─────────────────────────────────
+
+export function buildMemoryContext(
+  notes: Note[],
+  activeNoteId: string | null,
+  query: string,
+  _maxNotes: number,
+): string {
+  if (!notes.length) return 'No notes available.';
+
+  const lines: string[] = [];
+  lines.push(`Vault: ${notes.length} notes`);
+
+  const connections: string[] = [];
   notes.forEach(n => {
     const matches = n.content.matchAll(/\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]/g);
     for (const m of matches) {
       const target = notes.find(nt => nt.title.toLowerCase() === m[1].toLowerCase());
       if (target && target.id !== n.id) {
-        graph.get(n.id)!.connections.add(target.id);
-        graph.get(target.id)!.connections.add(n.id);
+        connections.push(`"${n.title}" → "${target.title}"`);
       }
     }
   });
-  graph.forEach((node) => { node.centrality = node.connections.size; });
-  return graph;
-}
 
-// Find shortest path between two notes in the graph
-function graphDistance(from: string, to: string, graph: Map<string, GraphNode>): number {
-  if (from === to) return 0;
-  const visited = new Set<string>([from]);
-  const queue: Array<{ id: string; dist: number }> = [{ id: from, dist: 0 }];
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    const node = graph.get(current.id);
-    if (!node) continue;
-    for (const neighborId of node.connections) {
-      if (neighborId === to) return current.dist + 1;
-      if (!visited.has(neighborId)) {
-        visited.add(neighborId);
-        queue.push({ id: neighborId, dist: current.dist + 1 });
-      }
-    }
+  if (connections.length > 0) {
+    lines.push(`\n${connections.length} connections:`);
+    connections.forEach(c => lines.push(`  ${c}`));
   }
-  return Infinity;
-}
 
-// Score and rank notes by relevance to a query
-function scoreNotes(
-  query: string,
-  notes: Note[],
-  activeNoteId: string | null,
-  graph: Map<string, GraphNode>,
-): Map<string, number> {
-  const scores = new Map<string, number>();
-  const queryLower = query.toLowerCase();
-  const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
-  const potentialRefs = notes.filter(n => queryLower.includes(n.title.toLowerCase()));
-
-  notes.forEach(note => {
-    let score = 0;
-    const titleLower = note.title.toLowerCase();
-    const contentLower = note.content.toLowerCase();
-    const node = graph.get(note.id);
-
-    if (potentialRefs.some(ref => ref.id === note.id)) score += 20;
-    queryWords.forEach(w => { if (titleLower.includes(w)) score += 8; });
-    queryWords.forEach(w => {
-      const matches = contentLower.split(w).length - 1;
-      if (matches > 0) score += Math.min(matches * 2, 12);
-    });
-    if (note.id === activeNoteId) score += 15;
-    if (activeNoteId && node?.connections.has(activeNoteId)) score += 8;
-    if (activeNoteId) {
-      const dist = graphDistance(activeNoteId, note.id, graph);
-      if (dist === 1) score += 8;
-      else if (dist === 2) score += 4;
-      else if (dist === 3) score += 1;
-    }
-    if (node) score += Math.min(node.centrality * 1.5, 10);
-    const tags = note.content.matchAll(/#(\w[\w-]*)/g);
-    for (const tag of tags) {
-      if (queryWords.some(w => tag[1].toLowerCase().includes(w))) score += 5;
-    }
-    if (score > 0) scores.set(note.id, score);
-  });
-  return scores;
-}
-
-// Build the memory context string
-export function buildMemoryContext(
-  notes: Note[],
-  activeNoteId: string | null,
-  query: string,
-  maxNotes: number,
-): string {
-  if (!notes.length) return 'No notes available in the vault yet.';
-  const graph = buildKnowledgeGraph(notes);
-  const scores = scoreNotes(query, notes, activeNoteId, graph);
-  const ranked = [...scores.entries()].sort((a, b) => b[1] - a[1]).slice(0, maxNotes);
-  const selectedIds = new Set(ranked.map(([id]) => id));
-  ranked.forEach(([id]) => {
-    const node = graph.get(id);
-    if (node) node.connections.forEach(connId => selectedIds.add(connId));
-  });
-  const selectedNotes = [...selectedIds].slice(0, maxNotes + 5)
-    .map(id => notes.find(n => n.id === id)).filter(Boolean) as Note[];
-  return formatMemoryContext(selectedNotes, graph, notes, activeNoteId);
-}
-
-function formatMemoryContext(
-  selectedNotes: Note[],
-  graph: Map<string, GraphNode>,
-  allNotes: Note[],
-  activeNoteId: string | null,
-): string {
-  const lines: string[] = [];
-  lines.push('=== YOUR MEMORY (Flint Vault Knowledge Base) ===');
-  lines.push(`Total notes in vault: ${allNotes.length}`);
-  lines.push('');
-  lines.push('=== MEMORY MAP (Note Connections) ===');
-  const sortedByConnections = [...graph.entries()]
-    .sort((a, b) => b[1].connections.size - a[1].connections.size);
-  for (const [, node] of sortedByConnections) {
-    if (node.connections.size > 0) {
-      const connNames = [...node.connections]
-        .map(id => allNotes.find(n => n.id === id)?.title).filter(Boolean);
-      if (connNames.length) {
-        lines.push(`"${node.title}" → ${connNames.map(n => `"${n}"`).join(', ')}`);
-      }
-    }
-  }
-  lines.push('');
   if (activeNoteId) {
-    const activeNote = allNotes.find(n => n.id === activeNoteId);
-    if (activeNote) {
-      const node = graph.get(activeNoteId);
-      const neighbors = node ? [...node.connections]
-        .map(id => allNotes.find(n => n.id === id)?.title).filter(Boolean) : [];
-      lines.push(`=== CURRENTLY OPEN NOTE ===`);
-      lines.push(`Title: "${activeNote.title}"`);
-      if (neighbors.length) lines.push(`Connected to: ${neighbors.join(', ')}`);
-      lines.push(activeNote.content.length > 3000
-        ? activeNote.content.slice(0, 3000) + '\n...[truncated]'
-        : activeNote.content);
-      lines.push('');
+    const active = notes.find(n => n.id === activeNoteId);
+    if (active) {
+      lines.push(`\nActive: "${active.title}"`);
+      lines.push(active.content.slice(0, 500));
     }
   }
-  lines.push('=== RELATED MEMORIES (Relevant Notes) ===');
-  for (const note of selectedNotes) {
-    if (note.id === activeNoteId) continue;
-    const node = graph.get(note.id);
-    const neighbors = node ? [...node.connections]
-      .map(id => allNotes.find(n => n.id === id)?.title).filter(Boolean) : [];
-    lines.push(`\n--- Note: "${note.title}" ---`);
-    if (neighbors.length) lines.push(`Connected to: ${neighbors.join(', ')}`);
-    const content = note.content.length > 1500
-      ? note.content.slice(0, 1500) + '\n...[truncated]'
-      : note.content;
-    lines.push(content);
-  }
-  lines.push('');
-  lines.push('=== INSTRUCTIONS ===');
-  lines.push('Use the above memory to answer the user\'s question.');
-  lines.push('Reference specific note names when mentioning information from them.');
-  lines.push('If information isn\'t in the notes, say so honestly.');
-  lines.push('You can suggest creating new notes or connections between existing ones.');
+
+  lines.push(`\nQuery: "${query}"`);
   return lines.join('\n');
 }
 
 // ============================================================
-// Web Search — Internet Access for the Agent
-// ============================================================
-
-interface SearchResult {
-  title: string;
-  snippet: string;
-  url: string;
-}
-
-// Search Wikipedia
-async function searchWikipedia(query: string): Promise<SearchResult[]> {
-  try {
-    const url = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(query)}&limit=5&format=json&origin=*`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return [];
-    const data = await res.json();
-    const results: SearchResult[] = [];
-    if (data[1] && data[2] && data[3]) {
-      for (let i = 0; i < data[1].length; i++) {
-        if (data[2][i]) {
-          results.push({
-            title: data[1][i],
-            snippet: data[2][i],
-            url: data[3][i] || '',
-          });
-        }
-      }
-    }
-    return results;
-  } catch {
-    return [];
-  }
-}
-
-// Get Wikipedia article summary
-async function getWikiSummary(title: string): Promise<string> {
-  try {
-    const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return '';
-    const data = await res.json();
-    return data.extract || '';
-  } catch {
-    return '';
-  }
-}
-
-// Main web search function
-export async function webSearch(query: string): Promise<string> {
-  const results = await searchWikipedia(query);
-  if (results.length === 0) return 'No web results found.';
-
-  // Get detailed summaries for top results
-  const detailed: string[] = [];
-  for (let i = 0; i < Math.min(results.length, 3); i++) {
-    const summary = await getWikiSummary(results[i].title);
-    if (summary) {
-      detailed.push(`**${results[i].title}**: ${summary}`);
-    }
-  }
-
-  if (detailed.length > 0) {
-    return `=== WEB SEARCH RESULTS for "${query}" ===\n\n${detailed.join('\n\n')}\n\n=== END WEB RESULTS ===`;
-  }
-
-  // Fallback to snippets
-  const snippets = results.map(r => `- ${r.title}: ${r.snippet}`).join('\n');
-  return `=== WEB SEARCH RESULTS for "${query}" ===\n${snippets}\n=== END WEB RESULTS ===`;
-}
-
-// Check if a query likely needs internet access
-function needsInternet(query: string): boolean {
-  const internetKeywords = [
-    'what is', 'who is', 'when was', 'where is', 'how does',
-    'latest', 'recent', 'current', 'today', 'news', 'weather',
-    'price', 'stock', 'score', 'update', 'new', 'trending',
-    'search', 'look up', 'find out', 'google', 'internet', 'web',
-    'explain', 'define', 'meaning of', 'tell me about',
-    'compare', 'difference between', 'vs', 'versus',
-    'best', 'top', 'popular', 'recommended',
-    'how to', 'tutorial', 'guide', 'learn',
-  ];
-  const lower = query.toLowerCase();
-  // Short factual questions likely need internet
-  if (query.split(/\s+/).length <= 6) return true;
-  return internetKeywords.some(kw => lower.includes(kw));
-}
-
-// ============================================================
-// Ollama API — Works with ANY model
-// ============================================================
-
-export async function chatWithOllama(
-  messages: { role: string; content: string }[],
-  settings: AISettings,
-  onChunk: (chunk: string) => void,
-  onDone: () => void,
-  onError: (err: string) => void,
-): Promise<void> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 180000); // 3 min timeout
-
-  try {
-    const response = await fetch(`${settings.ollamaUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: settings.model,
-        messages,
-        stream: true,
-        options: {
-          temperature: settings.temperature,
-          num_ctx: 8192,
-          top_p: 0.9,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      // Try to parse Ollama error for helpful message
-      try {
-        const errJson = JSON.parse(errText);
-        if (errJson.error?.includes('not found') || errJson.error?.includes('model')) {
-          throw new Error(`Model "${settings.model}" not found. Run: ollama pull ${settings.model}`);
-        }
-        throw new Error(errJson.error || `Ollama error (${response.status})`);
-      } catch (parseErr) {
-        if (parseErr instanceof Error && parseErr.message.includes('not found')) throw parseErr;
-        throw new Error(`Ollama error (${response.status}): ${errText || response.statusText}`);
-      }
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error('No response stream');
-
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const json = JSON.parse(line);
-          if (json.message?.content) {
-            onChunk(json.message.content);
-          }
-          if (json.done) {
-            clearTimeout(timeout);
-            onDone();
-            return;
-          }
-        } catch {
-          // skip malformed lines
-        }
-      }
-    }
-    clearTimeout(timeout);
-    onDone();
-  } catch (err: unknown) {
-    clearTimeout(timeout);
-    if (err instanceof Error && err.name === 'AbortError') {
-      onError('Request timed out after 3 minutes. Try a shorter query or a faster model.');
-    } else {
-      const msg = err instanceof Error ? err.message : String(err);
-      onError(msg);
-    }
-  }
-}
-
-// Fetch available models from Ollama
-export async function fetchOllamaModels(url: string): Promise<string[]> {
-  try {
-    const res = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.models || []).map((m: { name: string }) => m.name);
-  } catch {
-    return [];
-  }
-}
-
-// Check if Ollama is running
-export async function checkOllamaStatus(url: string): Promise<'connected' | 'disconnected'> {
-  try {
-    const res = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(3000) });
-    return res.ok ? 'connected' : 'disconnected';
-  } catch {
-    return 'disconnected';
-  }
-}
-
-// ============================================================
-// Main AI Chat Function — orchestrates everything
+// Main Chat Function — 3-Level Fallback
 // ============================================================
 
 export async function askFlintAI(
@@ -385,53 +132,316 @@ export async function askFlintAI(
   settings: AISettings,
   chatHistory: { role: string; content: string }[],
   onChunk: (chunk: string) => void,
-  onDone: (fullContent: string, webResults?: string) => void,
+  onDone: (fullContent: string, webResults?: string, usedOllama?: boolean) => void,
   onError: (err: string) => void,
 ): Promise<void> {
-  // 1. Build memory from notes + graph
-  const memory = buildMemoryContext(notes, activeNoteId, userQuery, settings.maxContextNotes);
+  const notesData = notes.map(n => ({
+    id: n.id,
+    title: n.title,
+    content: n.content,
+  }));
 
-  // 2. Search the web if internet access is enabled
-  let webResults = '';
-  if (settings.internetAccess && needsInternet(userQuery)) {
+  const body = {
+    query: userQuery,
+    notes: notesData,
+    activeNoteId,
+    settings: {
+      model: settings.model,
+      ollamaUrl: settings.ollamaUrl || DEFAULT_OLLAMA,
+      temperature: settings.temperature,
+      maxContextNotes: settings.maxContextNotes,
+      internetAccess: settings.internetAccess,
+      systemPrompt: settings.systemPrompt,
+    },
+    history: chatHistory,
+  };
+
+  let fullContent = '';
+
+  // ── Level 1: Try Python Agent ──────────────────────────
+  try {
+    console.log('[Flint AI] Trying Python agent...');
+    const response = await Promise.race([
+      fetch(`${AGENT_URL}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+      timeout(8000),
+    ]) as Response;
+
+    if (!response.ok) throw new Error(`Agent error ${response.status}`);
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('No stream');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr) continue;
+
+        try {
+          const data = JSON.parse(jsonStr);
+          if (data.content) {
+            fullContent += data.content;
+            onChunk(data.content);
+          }
+          if (data.done) {
+            if (data.error && !fullContent) {
+              onError(data.error);
+            } else {
+              onDone(fullContent, data.webResults || undefined, data.usedOllama ?? true);
+            }
+            return;
+          }
+        } catch { /* skip bad json */ }
+      }
+    }
+
+    if (fullContent) {
+      onDone(fullContent, undefined, true);
+      return;
+    }
+    throw new Error('Empty response from agent');
+  } catch (agentErr) {
+    console.warn('[Flint AI] Agent failed:', agentErr instanceof Error ? agentErr.message : agentErr);
+  }
+
+  // ── Level 2: Try Direct Ollama ─────────────────────────
+  if (settings.model) {
     try {
-      webResults = await webSearch(userQuery);
-    } catch {
-      webResults = ''; // Silently fail web search
+      console.log('[Flint AI] Trying direct Ollama with model:', settings.model);
+      const ollamaUrl = settings.ollamaUrl || DEFAULT_OLLAMA;
+
+      // Build a simple system prompt with note context
+      const memoryLines = buildMemoryContext(notes, activeNoteId, userQuery, settings.maxContextNotes);
+      const systemContent = `${settings.systemPrompt}\n\n${memoryLines}`;
+
+      const messages = [
+        { role: 'system', content: systemContent },
+        ...chatHistory.slice(-8).map(h => ({ role: h.role, content: h.content })),
+        { role: 'user', content: userQuery },
+      ];
+
+      const response = await Promise.race([
+        fetch(`${ollamaUrl}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: settings.model,
+            messages,
+            stream: true,
+            options: { temperature: settings.temperature, num_ctx: 8192 },
+          }),
+        }),
+        timeout(10000),
+      ]) as Response;
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+        throw new Error(errData.error || `Ollama error ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No stream');
+
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value, { stream: true });
+        const lines = text.split('\n').filter(l => l.trim());
+
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line);
+            const content = data.message?.content || '';
+            if (content) {
+              fullContent += content;
+              onChunk(content);
+            }
+            if (data.done) {
+              onDone(fullContent, undefined, true);
+              return;
+            }
+          } catch { /* skip */ }
+        }
+      }
+
+      if (fullContent) {
+        onDone(fullContent, undefined, true);
+        return;
+      }
+      throw new Error('Empty response from Ollama');
+    } catch (ollamaErr) {
+      const msg = ollamaErr instanceof Error ? ollamaErr.message : String(ollamaErr);
+      console.warn('[Flint AI] Direct Ollama failed:', msg);
+
+      // If we got a specific model error, report it
+      if (msg.includes('not found') || msg.includes('model')) {
+        onError(`Model "${settings.model}" not found. Run: ollama pull ${settings.model}`);
+        return;
+      }
     }
   }
 
-  // 3. Build the full system prompt
-  const activeNote = notes.find(n => n.id === activeNoteId);
-  let systemContent = `${settings.systemPrompt}\n\n${memory}`;
+  // ── Level 3: Browser Built-in Fallback ──────────────────
+  console.log('[Flint AI] Using browser built-in fallback');
+  fullContent = '';
+  const builtin = getBuiltinResponse(userQuery, notes, activeNoteId);
+  const chars = builtin.split('');
+  let idx = 0;
 
-  if (webResults) {
-    systemContent += `\n\n=== INTERNET ACCESS ===\nYou have internet access. Here are web search results for the user's query:\n${webResults}\n\nUse these web results alongside your memory to give comprehensive answers. Cite web sources when using them.`;
-  } else if (settings.internetAccess) {
-    systemContent += '\n\n=== INTERNET ACCESS ===\nYou have internet access enabled but no specific web results were found for this query. Answer from your training data if you can, and say if you\'re unsure.';
+  const streamBuiltin = () => {
+    if (idx < chars.length) {
+      const batch = chars.slice(idx, idx + 2).join('');
+      fullContent += batch;
+      onChunk(batch);
+      idx += 2;
+      setTimeout(streamBuiltin, 10);
+    } else {
+      onDone(fullContent, undefined, false);
+    }
+  };
+  streamBuiltin();
+}
+
+// ============================================================
+// Built-in Browser Fallback
+// ============================================================
+
+function getBuiltinResponse(
+  query: string,
+  notes: Note[],
+  activeNoteId: string | null,
+): string {
+  const q = query.toLowerCase().trim();
+  const noteMap = new Map(notes.map(n => [n.id, n]));
+  const activeNote = noteMap.get(activeNoteId || '');
+
+  // Build graph
+  const graph = new Map<string, Set<string>>();
+  notes.forEach(n => graph.set(n.id, new Set()));
+  notes.forEach(n => {
+    const matches = n.content.matchAll(/\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]/g);
+    for (const m of matches) {
+      const target = notes.find(nt => nt.title.toLowerCase() === m[1].toLowerCase());
+      if (target && target.id !== n.id) {
+        graph.get(n.id)!.add(target.id);
+        graph.get(target.id)!.add(n.id);
+      }
+    }
+  });
+
+  const totalConns = [...graph.values()].reduce((sum, s) => sum + s.size, 0) / 2;
+
+  // Help
+  if (q.includes('help') || q.includes('what can you')) {
+    return `I'm **Flint AI** — your note assistant!\n\n**I can do:**\n- List all your notes and connections\n- Search your vault by keywords\n- Show tags and topics\n- Answer questions about your notes\n- Summarize note contents\n\n**For full AI power:**\nInstall Ollama and run a model:\n\`\`\`\ncurl -fsSL https://ollama.ai/install.sh | sh\nollama pull llama3.2\n\`\`\`\nThen restart Flint. I'll automatically use Ollama for smarter responses.`;
   }
 
-  systemContent += `\n\nCurrent active note: "${activeNote?.title || 'None'}"`;
+  // List notes
+  if ((q.includes('list') || q.includes('show') || q.includes('what')) && (q.includes('note') || q.includes('all') || q.includes('everything'))) {
+    if (!notes.length) return 'Your vault is empty. Create some notes!';
+    let resp = `You have **${notes.length} notes** with **${totalConns} connections**:\n\n`;
+    notes.sort((a, b) => (graph.get(b.id)?.size || 0) - (graph.get(a.id)?.size || 0));
+    notes.forEach(n => {
+      const conns = graph.get(n.id)?.size || 0;
+      resp += `- **${n.title}** (${conns} link${conns !== 1 ? 's' : ''})\n`;
+    });
+    return resp;
+  }
 
-  // 4. Build messages array
-  const ollamaMessages = [
-    { role: 'system', content: systemContent },
-    ...chatHistory.slice(-10),
-    { role: 'user', content: userQuery },
-  ];
+  // Connections
+  if (q.includes('connection') || q.includes('graph') || q.includes('link')) {
+    const connected = [...graph.entries()].filter(([, c]) => c.size > 0);
+    if (!connected.length) return 'No connections yet. Use `[[Note Name]]` to link notes together!';
+    let resp = `**${connected.length} notes** with connections:\n\n`;
+    connected.sort((a, b) => b[1].size - a[1].size);
+    for (const [nid, conns] of connected) {
+      const names = [...conns].map(id => noteMap.get(id)?.title).filter(Boolean);
+      resp += `- **${noteMap.get(nid)?.title}** → ${names.join(', ')}\n`;
+    }
+    return resp;
+  }
 
-  // 5. Stream from Ollama
-  let fullContent = '';
-  await chatWithOllama(
-    ollamaMessages,
-    settings,
-    (chunk) => {
-      fullContent += chunk;
-      onChunk(chunk);
-    },
-    () => {
-      onDone(fullContent, webResults || undefined);
-    },
-    onError,
-  );
+  // Tags
+  if (q.includes('tag')) {
+    const allTags = new Map<string, string[]>();
+    notes.forEach(n => {
+      const tagMatches = n.content.matchAll(/#(\w[\w-]*)/g);
+      for (const m of tagMatches) {
+        const tag = m[1];
+        if (!allTags.has(tag)) allTags.set(tag, []);
+        allTags.get(tag)!.push(n.title);
+      }
+    });
+    if (!allTags.size) return 'No tags found. Use `#tag` to categorize notes.';
+    let resp = `**${allTags.size} tags** found:\n\n`;
+    for (const [tag, noteList] of allTags) {
+      resp += `- **#${tag}** (${noteList.length} note${noteList.length > 1 ? 's' : ''}): ${noteList.join(', ')}\n`;
+    }
+    return resp;
+  }
+
+  // Summarize
+  if (q.includes('summarize') || q.includes('summary')) {
+    if (!notes.length) return 'Nothing to summarize — vault is empty.';
+    let resp = `**Summary of your vault** (${notes.length} notes, ${totalConns} connections):\n\n`;
+    notes.slice(0, 8).forEach(n => {
+      const firstLine = n.content.split('\n').find(l => l.trim() && !l.startsWith('#')) || '';
+      resp += `**${n.title}**: ${firstLine.slice(0, 120)}${firstLine.length > 120 ? '...' : ''}\n\n`;
+    });
+    return resp;
+  }
+
+  // Search by keywords
+  const words = q.replace(/[?.,!]/g, '').split(/\s+/).filter(w => w.length > 2);
+  const matched = notes.filter(n => {
+    const content = (n.title + ' ' + n.content).toLowerCase();
+    return words.some(w => content.includes(w));
+  });
+
+  if (matched.length > 0) {
+    let resp = activeNote
+      ? `Based on your vault (viewing **"${activeNote?.title}"**):\n\n`
+      : `Found **${matched.length}** relevant notes:\n\n`;
+
+    matched.slice(0, 5).forEach(n => {
+      const conns = [...(graph.get(n.id) || [])].map(id => noteMap.get(id)?.title).filter(Boolean);
+      resp += `### ${n.title}\n`;
+      if (conns.length) resp += `*Connected to: ${conns.join(', ')}*\n`;
+      const paragraphs = n.content.split('\n\n').filter(p => p.trim());
+      const relevant = paragraphs.filter(p => words.some(w => p.toLowerCase().includes(w)));
+      resp += (relevant.length ? relevant : paragraphs).slice(0, 2).join('\n\n');
+      resp += '\n\n';
+    });
+
+    if (matched.length > 5) resp += `...and ${matched.length - 5} more.\n`;
+    resp += `\n*Found across ${notes.length} notes with ${totalConns} connections.*`;
+    return resp;
+  }
+
+  // Default
+  let resp = `I searched all **${notes.length} notes** but couldn't find anything matching "${query}".\n\n`;
+  if (notes.length > 0) {
+    resp += '**Your vault contains:**\n';
+    notes.slice(0, 8).forEach(n => { resp += `- ${n.title}\n`; });
+    if (notes.length > 8) resp += `...and ${notes.length - 8} more\n`;
+  }
+  resp += '\n*Install Ollama for full AI-powered responses.*';
+  return resp;
 }
