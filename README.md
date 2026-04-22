@@ -1,3 +1,8 @@
+<div align="center">
+  <img src="" style="width: 50%; height: auto;">
+</div>   
+
+
 # ⬡ Flint
 
 A **secure, local-first knowledge base** with AI-powered intelligence. Your notes, your graph, your AI — all running locally on your machine.
