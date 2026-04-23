@@ -285,7 +285,7 @@ export function SettingsPanel() {
                 borderBottom: tab === t ? '2px solid #666' : '2px solid transparent',
                 transition: 'all 0.15s',
               }}>
-              {t === 'ai' ? '🧠 AI' : t}
+              {t === 'ai' ? 'AI' : t}
             </button>
           ))}
         </div>
@@ -341,11 +341,11 @@ export function SettingsPanel() {
                 </div>
                 <div style={{ fontSize: 11, color: '#444', lineHeight: 1.6 }}>
                   {!agentUp
-                    ? '⚠️ Python agent not running. Run: python3 ~/.flint/agent/agent.py'
+                    ? 'Python agent not running. Run: python3 ~/.flint/agent/agent.py'
                     : ollamaStatus === 'connected'
-                    ? `✅ Agent running. Found ${models.length} model${models.length !== 1 ? 's' : ''}: ${models.slice(0, 3).join(', ')}${models.length > 3 ? '...' : ''}`
+                    ? `Agent running. Found ${models.length} model${models.length !== 1 ? 's' : ''}: ${models.slice(0, 3).join(', ')}${models.length > 3 ? '...' : ''}`
                     : ollamaStatus === 'disconnected'
-                    ? '🔧 Agent running but Ollama not found. Start with: ollama serve'
+                    ? 'Agent running but Ollama not found. Start with: ollama serve'
                     : 'Checking connection...'}
                 </div>
               </div>
@@ -408,8 +408,8 @@ export function SettingsPanel() {
                 </div>
                 <div style={{ fontSize: 11, color: '#444', lineHeight: 1.6 }}>
                   {state.aiSettings.internetAccess
-                    ? '✅ AI can search the web (Wikipedia) to supplement answers with real-time information.'
-                    : '❌ AI will only use your notes as context. Enable to allow web searches.'}
+                    ? 'AI can search the web (Wikipedia) to supplement answers with real-time information.'
+                    : 'AI will only use your notes as context. Enable to allow web searches.'}
                 </div>
               </div>
 
@@ -460,7 +460,7 @@ export function SettingsPanel() {
                 <div style={{ fontSize: 15, fontWeight: 600, color: '#aaa', marginBottom: 10 }}>{vault?.name || 'None'}</div>
                 {vault?.isFolderVault && vault.folderPath && (
                   <div style={{ fontSize: 10, color: '#444', marginBottom: 8, padding: '4px 8px', background: '#080808', borderRadius: 4, border: '1px solid #151515', wordBreak: 'break-all' }}>
-                    📁 {vault.folderPath}
+                     {vault.folderPath}
                   </div>
                 )}
                 <div className="flex gap-4" style={{ fontSize: 11, color: '#444' }}>
