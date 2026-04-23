@@ -120,7 +120,7 @@ export function AIChat() {
         const errMsg = {
           id: Math.random().toString(36).slice(2) + Date.now().toString(36),
           role: 'assistant' as const,
-          content: `⚠️ ${err}`,
+          content: `${err}`,
           timestamp: Date.now(),
         };
         dispatch({ type: 'ADD_AI_MESSAGE', payload: errMsg });
@@ -234,10 +234,10 @@ export function AIChat() {
         <div style={{ padding: 12, borderBottom: '1px solid #1a1a1a', background: '#060606', flexShrink: 0 }}>
           <div style={{ fontSize: 10, color: '#555', marginBottom: 8, padding: '4px 8px', background: '#0a0a0a', borderRadius: 4, border: '1px solid #1a1a1a' }}>
             {isOllamaMode
-              ? `⚡ Agent + Ollama (${aiSettings.model}) — full AI`
+              ? `Agent + Ollama (${aiSettings.model}) — full AI`
               : isAgentMode
-              ? `🔧 Agent running — no Ollama. Install: ollama pull llama3.2`
-              : `⚠️ Agent not running. Run: python3 ~/.flint/agent/agent.py`}
+              ? `Agent running — no Ollama. Install: ollama pull llama3.2`
+              : `Agent not running. Run: python3 ~/.flint/agent/agent.py`}
           </div>
           <ConfigField label="Ollama URL">
             <input type="text" value={aiSettings.ollamaUrl}
@@ -329,9 +329,9 @@ export function AIChat() {
                 : 'I search your notes to answer. Start the Python agent for full AI + Ollama.'}
             </div>
             <div className="flex items-center justify-center gap-3" style={{ fontSize: 9, color: '#333', marginBottom: 16 }}>
-              <span>📝 {memoryStats.notes} notes</span>
+              <span>{memoryStats.notes} notes</span>
               <span>🔗 {memoryStats.connections} links</span>
-              {aiSettings.internetAccess && <span>🌐 Web</span>}
+              {aiSettings.internetAccess && <span>Web</span>}
             </div>
             {activeNote && (
               <div style={{
@@ -339,7 +339,7 @@ export function AIChat() {
                 background: '#0a0a0a', borderRadius: 6,
                 border: '1px solid #1a1a1a', marginBottom: 12,
               }}>
-                📄 Active: {activeNote.title}
+                Active: {activeNote.title}
               </div>
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
