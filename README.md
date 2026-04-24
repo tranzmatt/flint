@@ -10,56 +10,21 @@
 
 ---
 
-# Flint 
+# *Flint* 
 
-- A **secure, local-first knowledge base** with AI-powered intelligence. Your notes, your graph, your AI — all running locally on your machine.
-
----
-
-https://github.com/user-attachments/assets/dbd70229-1ea6-499c-9fdd-476cdb581a79
+> - A **secure, local-first knowledge base** with AI-powered intelligence. Your notes, your graph, your AI - all running locally on your machine.
 
 ---
-## Features
 
-### Note-Taking
-- Full **Markdown** support with live preview
-- **Wiki Links** (`[[Note Name]]`) to connect notes
-- **Tags** (`#tag`) for categorization
-- **Auto-save** with 600ms debounce
-- Split view (Editor + Preview)
-- Formatting toolbar (Bold, Italic, Heading, Quote, Code, Links, Lists)
-
-### Graph View
-- Interactive **force-directed graph** visualization
-- Node size scales with connection count
-- Physics simulation — drag nodes, connected notes follow
-- Zoom, pan, search, depth filter
-- Curved edges between connected notes
-
-### AI Agent (Python + Ollama)
-- **Real Python backend** that connects to Ollama locally
-- **Notes = Memory** — AI reads all your notes and graph connections
-- **Internet access** — AI searches Wikipedia for real-time info
-- **Works with ANY Ollama model** — llama3.2, mistral, codellama, phi3, etc.
-- **Streaming responses** in real-time
-- **Browser fallback** when agent is not running
-
-### Local & Secure
-- **No cloud, no tracking** — all data stays on your device
-- **localStorage** for persistence
-- **No external API calls** (except Wikipedia when internet access is enabled)
-- **File System Access API** to open any local folder as a vault
+https://github.com/user-attachments/assets/94fa53f9-b3b6-4df8-9038-3f763aec54d4
+> [!IMPORTANT]  
+> - The connection lines between the nodes are very thin, so it's not visible in the video. I will fix it very soon.
 
 ---
 
 ##  Installation
 
-### Prerequisites
-- **Node.js** 18+ — [Install](https://nodejs.org)
-- **Python 3** (for AI Agent) — `sudo apt install python3 python3-pip`
-- **Ollama** (for AI) — [Install](https://ollama.ai) then `ollama pull llama3.2`
-
-### Install with 
+### For useres !!
 ```bash
 git clone https://github.com/Chintanpatel24/flint.git
 cd flint
@@ -68,44 +33,46 @@ bash update.sh
 npm audit fix --force
 ```
 
-After install, Flint appears in your **app menu**. Or run `flint` from terminal.
+### For devloping ,
+```bash
+git clone --branch test-api --single-branch https://github.com/Chintanpatel24/flint.git
+```
 
 ---
 
-## Usage
+## Features
 
-### Commands
-| Command | Description |
-|---------|-------------|
-| `flint` | Launch Flint desktop app |
-| `flint-agent` | Start AI agent only (for browser mode) |
-| `bash update.sh` | Check for updates and rebuild |
-| `bash uninstall.sh` | Remove Flint from system |
+>### Note-Taking
+- Full **Markdown** support with live preview
+- **Wiki Links** (`[[Note Name]]`) to connect notes
+- **Tags** (`#tag`) for categorization
+- **Auto-save** with 600ms debounce
+- Split view (Editor + Preview)
+- Formatting toolbar (Bold, Italic, Heading, Quote, Code, Links, Lists)
 
-### Keyboard Shortcuts
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+N` | New note |
-| `Ctrl+E` | Cycle view mode (Edit → Preview → Split) |
-| `Ctrl+G` | Graph view |
-| `Ctrl+P` | Command palette |
-| `Ctrl+Shift+F` | Search notes |
-| `Ctrl+J` | Toggle AI chat |
-| `Ctrl+\` | Toggle sidebar |
-| `Ctrl+,` | Settings |
+>### Graph View
+- Interactive **force-directed graph** visualization
+- Node size scales with connection count
+- Physics simulation - drag nodes, connected notes follow
+- Zoom, pan, search, depth filter
+- Curved edges between connected notes
 
-### AI Agent
-The Python agent runs automatically when Flint starts (Electron mode).
+>### AI Agent (Python + Ollama + GGUF + APIs)
+- **Real Python backend** that connects to Ollama locally
+- **Notes = Memory** - AI reads all your notes and graph connections
+- **Internet access** - AI searches Wikipedia for real-time info
+- **Works with ANY Ollama model** - llama3.2, mistral, codellama, phi3, etc.
+- **Streaming responses** in real-time
+- **Browser fallback** when agent is not running
 
-For browser mode, start it manually:
-```bash
-flint-agent
-# or: python3 ~/.flint/agent/agent.py
-```
+>### Local & Secure 
+- **No cloud, no tracking** - all data stays on your device
+- **localStorage** for persistence
+- **No external API calls** (except Wikipedia when internet access is enabled)
+- **File System Access API** to open any local folder as a vault
 
-Install an Ollama model:
-```bash
-ollama pull llama3.2    # Small, fast
-ollama pull mistral     # Good balance
-ollama pull codellama   # Code-focused
-```
+---
+
+> [!NOTE]  
+> **It also works without any LLM or any API config** – with the built-in agent scripts & with the notes scanning (shown in the video), but it's dumb for the current time with the basic and minimal algorithms.
+> The workflow is **Ollama** > **GGUF** > **APIs** > **local-built agent script**. 
