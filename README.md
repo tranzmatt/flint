@@ -29,6 +29,10 @@ https://github.com/user-attachments/assets/94fa53f9-b3b6-4df8-9038-3f763aec54d4
 git clone https://github.com/Chintanpatel24/flint.git
 cd flint
 bash install.sh
+```
+
+### For errors @
+```bash
 bash update.sh
 npm audit fix --force
 ```
