@@ -141,6 +141,7 @@ function loadState(): AppState | null {
         sidebarOpen: parsed.sidebarOpen ?? true,
         rightPanelOpen: parsed.rightPanelOpen ?? false,
         showGraphView: false,
+        showCanvasView: false,
         showSearch: false,
         showCommandPalette: false,
         settingsOpen: false,
@@ -394,6 +395,7 @@ function getInitialState(): AppState {
     sidebarOpen: true,
     rightPanelOpen: false,
     showGraphView: false,
+    showCanvasView: false,
     showSearch: false,
     showCommandPalette: false,
     settingsOpen: false,
@@ -425,6 +427,7 @@ type Action =
   | { type: 'TOGGLE_SIDEBAR' }
   | { type: 'TOGGLE_RIGHT_PANEL' }
   | { type: 'TOGGLE_GRAPH_VIEW' }
+  | { type: 'TOGGLE_CANVAS_VIEW' }
   | { type: 'TOGGLE_SEARCH' }
   | { type: 'TOGGLE_COMMAND_PALETTE' }
   | { type: 'TOGGLE_SETTINGS' }
@@ -453,9 +456,9 @@ function reducer(state: AppState, action: Action): AppState {
     case 'OPEN_VAULT': {
       const vault = state.vaults.find(v => v.id === action.payload);
       if (!vault) return state;
-      return syncActiveVaultState({ ...state, activeVaultId: vault.id, showGraphView: false, showSearch: false, showCommandPalette: false });
+      return syncActiveVaultState({ ...state, activeVaultId: vault.id, showGraphView: false, showCanvasView: false, showSearch: false, showCommandPalette: false });
     }
-    case 'CLOSE_VAULT': return syncActiveVaultState({ ...state, activeVaultId: null, showGraphView: false, showSearch: false, showCommandPalette: false });
+    case 'CLOSE_VAULT': return syncActiveVaultState({ ...state, activeVaultId: null, showGraphView: false, showCanvasView: false, showSearch: false, showCommandPalette: false });
     case 'DELETE_VAULT': {
       const vaults = state.vaults.filter(v => v.id !== action.payload);
       const vaultData = { ...state.vaultData };
@@ -500,7 +503,8 @@ function reducer(state: AppState, action: Action): AppState {
     case 'SET_VIEW_MODE': return { ...state, viewMode: action.payload };
     case 'TOGGLE_SIDEBAR': return { ...state, sidebarOpen: !state.sidebarOpen };
     case 'TOGGLE_RIGHT_PANEL': return { ...state, rightPanelOpen: !state.rightPanelOpen };
-    case 'TOGGLE_GRAPH_VIEW': return { ...state, showGraphView: !state.showGraphView };
+    case 'TOGGLE_GRAPH_VIEW': return { ...state, showGraphView: !state.showGraphView, showCanvasView: false };
+    case 'TOGGLE_CANVAS_VIEW': return { ...state, showCanvasView: !state.showCanvasView, showGraphView: false };
     case 'TOGGLE_SEARCH': return { ...state, showSearch: !state.showSearch };
     case 'TOGGLE_COMMAND_PALETTE': return { ...state, showCommandPalette: !state.showCommandPalette };
     case 'TOGGLE_SETTINGS': return { ...state, settingsOpen: !state.settingsOpen };
@@ -529,6 +533,7 @@ interface StoreContextType {
   state: AppState;
   dispatch: React.Dispatch<Action>;
   createNote: (folderId?: string | null) => void;
+  openDailyNote: () => void;
   createFolder: (name: string) => void;
   getNoteByTitle: (title: string) => Note | undefined;
   getBacklinks: (noteId: string) => Note[];
@@ -551,6 +556,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const note: Note = { id: generateId(), title: 'Untitled', content: '# Untitled\n\n', folderId: folderId || null, pinned: false, createdAt: Date.now(), updatedAt: Date.now() };
     dispatch({ type: 'ADD_NOTE', payload: note });
   }, []);
+
+  const openDailyNote = useCallback(() => {
+    const now = new Date();
+    const title = now.toISOString().slice(0, 10);
+    const folder = state.folders.find(f => f.name.toLowerCase() === 'daily notes');
+    const existing = state.notes.find(note => note.title === title);
+    if (existing) {
+      dispatch({ type: 'OPEN_TAB', payload: existing.id });
+      return;
+    }
+    const folderId = folder?.id || generateId();
+    const note: Note = {
+      id: generateId(),
+      title,
+      content: `# ${title}\n\n## Tasks\n- [ ] \n\n## Notes\n\n## Reflection\n\n`,
+      folderId,
+      pinned: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    if (!folder) {
+      dispatch({ type: 'ADD_FOLDER', payload: { id: folderId, name: 'Daily Notes', parentId: null, collapsed: false } });
+    }
+    dispatch({ type: 'ADD_NOTE', payload: note });
+  }, [state.folders, state.notes]);
 
   const createFolder = useCallback((name: string) => {
     const folder: Folder = { id: generateId(), name, parentId: null, collapsed: false };
@@ -586,7 +616,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <StoreContext.Provider value={{ state, dispatch, createNote, createFolder, getNoteByTitle, getBacklinks, getOutgoingLinks, importNotes }}>
+    <StoreContext.Provider value={{ state, dispatch, createNote, openDailyNote, createFolder, getNoteByTitle, getBacklinks, getOutgoingLinks, importNotes }}>
       {children}
     </StoreContext.Provider>
   );

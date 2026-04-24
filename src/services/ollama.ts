@@ -263,7 +263,7 @@ export async function askFlintAI(
   } catch (agentErr) {
     console.warn('[Flint AI] Agent failed:', agentErr instanceof Error ? agentErr.message : agentErr);
     if (settings.provider === 'local-gguf') {
-      onError('Local GGUF runs through Flint\'s self-hosted agent. Start `python3 ~/.flint/agent/agent.py` and try again.');
+      onError('Local GGUF runs through Flint\'s self-hosted agent. Start the agent, then use Check connection in Settings and try again.');
       return;
     }
   }

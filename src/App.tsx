@@ -5,6 +5,7 @@ import { TabBar } from './components/TabBar';
 import { Editor } from './components/Editor';
 import { Preview } from './components/Preview';
 import { GraphView } from './components/GraphView';
+import { CanvasView } from './components/CanvasView';
 import { SearchModal } from './components/SearchModal';
 import { StatusBar } from './components/StatusBar';
 import { BacklinksPanel } from './components/BacklinksPanel';
@@ -16,19 +17,21 @@ import {
   PanelLeftOpen, PenLine, Eye, Columns2,
   PanelRightOpen, PanelRightClose, Plus, Waypoints, Search,
   Bold, Italic, Code, List, Link2, Heading2, Quote,
-  Command, FolderPlus, Settings, Hash, Brackets, Brain,
+  Command, FolderPlus, Settings, Hash, Brackets, Brain, CalendarDays, LayoutGrid,
 } from 'lucide-react';
 
 function CommandPalette() {
-  const { dispatch, createNote, createFolder } = useStore();
+  const { dispatch, createNote, createFolder, openDailyNote } = useStore();
   const [query, setQuery] = useState('');
   const [idx, setIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const commands = [
     { icon: <Plus size={14} />, label: 'New note', action: () => { createNote(); dispatch({ type: 'TOGGLE_COMMAND_PALETTE' }); } },
+    { icon: <CalendarDays size={14} />, label: 'Open daily note', action: () => { openDailyNote(); dispatch({ type: 'TOGGLE_COMMAND_PALETTE' }); } },
     { icon: <FolderPlus size={14} />, label: 'New folder', action: () => { createFolder('New Folder'); dispatch({ type: 'TOGGLE_COMMAND_PALETTE' }); } },
     { icon: <Waypoints size={14} />, label: 'Open graph view', action: () => { dispatch({ type: 'TOGGLE_GRAPH_VIEW' }); dispatch({ type: 'TOGGLE_COMMAND_PALETTE' }); } },
+    { icon: <LayoutGrid size={14} />, label: 'Open canvas', action: () => { dispatch({ type: 'TOGGLE_CANVAS_VIEW' }); dispatch({ type: 'TOGGLE_COMMAND_PALETTE' }); } },
     { icon: <Search size={14} />, label: 'Search notes', action: () => { dispatch({ type: 'TOGGLE_SEARCH' }); dispatch({ type: 'TOGGLE_COMMAND_PALETTE' }); } },
     { icon: <PenLine size={14} />, label: 'Switch to editor', action: () => { dispatch({ type: 'SET_VIEW_MODE', payload: 'edit' }); dispatch({ type: 'TOGGLE_COMMAND_PALETTE' }); } },
     { icon: <Eye size={14} />, label: 'Switch to preview', action: () => { dispatch({ type: 'SET_VIEW_MODE', payload: 'preview' }); dispatch({ type: 'TOGGLE_COMMAND_PALETTE' }); } },
@@ -80,8 +83,8 @@ function CommandPalette() {
 }
 
 function AppContent() {
-  const { state, dispatch, createNote } = useStore();
-  const { activeNoteId, viewMode, showGraphView, showSearch, showCommandPalette, sidebarOpen, rightPanelOpen, activeVaultId, settingsOpen, showAIChat } = state;
+  const { state, dispatch, createNote, openDailyNote } = useStore();
+  const { activeNoteId, viewMode, showGraphView, showCanvasView, showSearch, showCommandPalette, sidebarOpen, rightPanelOpen, activeVaultId, settingsOpen, showAIChat } = state;
 
   // Dynamic style tag for settings
   useEffect(() => {
@@ -98,7 +101,9 @@ function AppContent() {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'f') { e.preventDefault(); dispatch({ type: 'TOGGLE_SEARCH' }); }
       if ((e.ctrlKey || e.metaKey) && e.key === 'n') { e.preventDefault(); createNote(); }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') { e.preventDefault(); openDailyNote(); }
       if ((e.ctrlKey || e.metaKey) && e.key === 'g') { e.preventDefault(); dispatch({ type: 'TOGGLE_GRAPH_VIEW' }); }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') { e.preventDefault(); dispatch({ type: 'TOGGLE_CANVAS_VIEW' }); }
       if ((e.ctrlKey || e.metaKey) && e.key === 'p') { e.preventDefault(); dispatch({ type: 'TOGGLE_COMMAND_PALETTE' }); }
       if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
         e.preventDefault();
@@ -112,7 +117,7 @@ function AppContent() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [dispatch, createNote, viewMode]);
+  }, [dispatch, createNote, openDailyNote, viewMode]);
 
   if (!activeVaultId) return <VaultScreen />;
 
@@ -137,7 +142,9 @@ function AppContent() {
           <RibbonBtn icon={<PanelLeftOpen size={16} />} active={sidebarOpen} onClick={() => dispatch({ type: 'TOGGLE_SIDEBAR' })} title="Toggle sidebar (Ctrl+\)" />
           <RibbonBtn icon={<Search size={16} />} onClick={() => dispatch({ type: 'TOGGLE_SEARCH' })} title="Search (Ctrl+Shift+F)" />
           <RibbonBtn icon={<Plus size={16} />} onClick={() => createNote()} title="New note (Ctrl+N)" />
+          <RibbonBtn icon={<CalendarDays size={16} />} onClick={() => openDailyNote()} title="Daily note (Ctrl+Shift+D)" />
           <RibbonBtn icon={<Waypoints size={16} />} active={showGraphView} onClick={() => dispatch({ type: 'TOGGLE_GRAPH_VIEW' })} title="Graph view (Ctrl+G)" />
+          <RibbonBtn icon={<LayoutGrid size={16} />} active={showCanvasView} onClick={() => dispatch({ type: 'TOGGLE_CANVAS_VIEW' })} title="Canvas (Ctrl+Shift+C)" />
           <RibbonBtn icon={<Command size={16} />} onClick={() => dispatch({ type: 'TOGGLE_COMMAND_PALETTE' })} title="Command palette (Ctrl+P)" />
           <RibbonBtn icon={<Brain size={16} />} active={showAIChat} onClick={() => dispatch({ type: 'TOGGLE_AI_CHAT' })} title="Flint AI (Ctrl+J)" />
 
@@ -261,6 +268,7 @@ function AppContent() {
 
       <StatusBar />
       {showGraphView && <GraphView />}
+      {showCanvasView && <CanvasView />}
       {showSearch && <SearchModal />}
       {showCommandPalette && <CommandPalette />}
       {settingsOpen && <SettingsPanel />}

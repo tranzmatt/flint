@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useStore } from '../store';
-import { FileText, Folder, FolderOpen, ChevronRight, ChevronDown, Plus, FolderPlus, Search, Pin, Trash2 } from 'lucide-react';
+import { FileText, Folder, FolderOpen, ChevronRight, ChevronDown, Plus, FolderPlus, Search, Pin, Trash2, CalendarDays } from 'lucide-react';
 
 export function Sidebar() {
-  const { state, dispatch, createNote, createFolder } = useStore();
+  const { state, dispatch, createNote, createFolder, openDailyNote } = useStore();
   const [search, setSearch] = useState('');
   const [ctx, setCtx] = useState<{ type: 'note' | 'folder'; id: string; x: number; y: number } | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
@@ -48,6 +48,12 @@ export function Sidebar() {
           onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-focus)'; e.currentTarget.style.color = 'var(--text)'; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
           <FolderPlus size={11} /> Folder
+        </button>
+        <button onClick={() => openDailyNote()} title="Daily note"
+          style={{ padding: '4px 9px', background: 'var(--bg-elevated)', border: '1px solid var(--border-light)', color: 'var(--text-secondary)', fontSize: 11, borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-focus)'; e.currentTarget.style.color = 'var(--text)'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+          <CalendarDays size={11} /> Daily
         </button>
       </div>
 

@@ -93,6 +93,7 @@ export interface AppState {
   sidebarOpen: boolean;
   rightPanelOpen: boolean;
   showGraphView: boolean;
+  showCanvasView: boolean;
   showSearch: boolean;
   showCommandPalette: boolean;
   settingsOpen: boolean;

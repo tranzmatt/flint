@@ -290,10 +290,10 @@ export function AIChat() {
         }}>
           <div className="flex items-center gap-2" style={{ fontSize: 10, color: '#deb998' }}>
             <AlertTriangle size={10} />
-            <span>Python agent not running — using browser fallback</span>
+            <span>Agent offline — using browser fallback</span>
           </div>
-          <div style={{ fontSize: 9, color: '#d9c1a5', marginTop: 4, fontFamily: 'monospace', background: '#1e1815', padding: '4px 6px', borderRadius: 4, border: '1px solid #5c4837' }}>
-            python3 ~/.flint/agent/agent.py
+          <div style={{ fontSize: 9, color: '#d9c1a5', marginTop: 4, background: '#1e1815', padding: '4px 6px', borderRadius: 4, border: '1px solid #5c4837' }}>
+            Open Settings and use Check connection after your local agent is running.
           </div>
         </div>
       )}
@@ -333,7 +333,7 @@ export function AIChat() {
                 : isApiProvider
                 ? `Agent running — add API key + model for ${providerName}`
                 : `Agent running — no Ollama. Install: ollama pull llama3.2`
-              : `Agent not running. Run: python3 ~/.flint/agent/agent.py`}
+              : 'Agent offline — use Settings > Check connection'}
           </div>
           <ConfigField label="Provider">
             <select value={aiSettings.provider}
@@ -346,11 +346,13 @@ export function AIChat() {
               <option value="openai-compatible">OpenAI-compatible</option>
             </select>
           </ConfigField>
-          <ConfigField label="Ollama URL">
-            <input type="text" value={aiSettings.ollamaUrl}
-              onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { ollamaUrl: e.target.value } })}
-              style={{ ...inputStyle, fontSize: 11 }} />
-          </ConfigField>
+          {aiSettings.provider === 'ollama' && (
+            <ConfigField label="Ollama URL">
+              <input type="text" value={aiSettings.ollamaUrl}
+                onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { ollamaUrl: e.target.value } })}
+                style={{ ...inputStyle, fontSize: 11 }} />
+            </ConfigField>
+          )}
           {isApiProvider && (
             <ConfigField label="API key">
               <input type="password" value={aiSettings.apiKey}

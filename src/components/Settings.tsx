@@ -170,6 +170,10 @@ export function SettingsPanel() {
     }
   };
 
+  const checkConnection = async () => {
+    await refreshModels();
+  };
+
   // Open a folder from system as a vault
   const openFolderAsVault = async () => {
     try {
@@ -380,14 +384,15 @@ export function SettingsPanel() {
                       {agentUp ? <Wifi size={10} /> : <WifiOff size={10} />}
                       {agentUp ? 'Agent Running' : 'Agent Down'}
                     </div>
-                    <button onClick={refreshModels} style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', display: 'flex' }}>
+                    <button onClick={checkConnection} style={{ padding: '5px 8px', background: '#141414', border: '1px solid #1a1a1a', borderRadius: 5, color: '#888', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 10 }}>
                       <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+                      {refreshing ? 'Checking' : 'Check connection'}
                     </button>
                   </div>
                 </div>
                 <div style={{ fontSize: 11, color: '#95a1b3', lineHeight: 1.6 }}>
                   {!agentUp
-                    ? 'Python agent not running. Run: python3 ~/.flint/agent/agent.py'
+                    ? 'Agent offline. Use Check connection after starting your local agent.'
                     : state.aiSettings.provider === 'ollama' && ollamaStatus === 'connected'
                     ? `Agent running. Found ${models.length} model${models.length !== 1 ? 's' : ''}: ${models.slice(0, 3).join(', ')}${models.length > 3 ? '...' : ''}`
                     : state.aiSettings.provider === 'ollama' && ollamaStatus === 'disconnected'
@@ -404,7 +409,12 @@ export function SettingsPanel() {
 
               <SettingRow icon={<Brain size={14} />} label="Provider">
                 <select value={state.aiSettings.provider}
-                  onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { provider: e.target.value as 'ollama' | 'openai' | 'gemini' | 'openai-compatible' | 'local-gguf' } })}
+                  onChange={e => dispatch({
+                    type: 'UPDATE_AI_SETTINGS',
+                    payload: {
+                      provider: e.target.value as 'ollama' | 'openai' | 'gemini' | 'openai-compatible' | 'local-gguf',
+                    },
+                  })}
                   style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }}>
                   <option value="ollama">Ollama (local)</option>
                   <option value="local-gguf">Self-hosted GGUF (local file)</option>
@@ -414,12 +424,13 @@ export function SettingsPanel() {
                 </select>
               </SettingRow>
 
-              {/* Ollama URL */}
-              <SettingRow icon={<Wifi size={14} />} label={isApiProvider ? 'Ollama URL (fallback)' : 'Ollama URL'}>
-                <input type="text" value={state.aiSettings.ollamaUrl}
-                  onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { ollamaUrl: e.target.value } })}
-                  style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }} />
-              </SettingRow>
+              {state.aiSettings.provider === 'ollama' && (
+                <SettingRow icon={<Wifi size={14} />} label="Ollama URL">
+                  <input type="text" value={state.aiSettings.ollamaUrl}
+                    onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { ollamaUrl: e.target.value } })}
+                    style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }} />
+                </SettingRow>
+              )}
 
               {isApiProvider && (
                 <SettingRow icon={<Brain size={14} />} label="API key">

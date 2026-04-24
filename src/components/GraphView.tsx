@@ -1,10 +1,14 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useStore } from '../store';
 import { FlintLogo } from './FlintLogo';
-import { X, ZoomIn, ZoomOut, RotateCcw, Play, Pause, Search } from 'lucide-react';
+import { X, ZoomIn, ZoomOut, RotateCcw, Play, Pause, Search, Palette } from 'lucide-react';
 
 interface GNode { id: string; title: string; x: number; y: number; vx: number; vy: number; conns: number; group: string; }
 interface GEdge { from: string; to: string; }
+
+function graphColorKey(vaultId: string | null) {
+  return `flint-graph-colors-${vaultId || 'default'}`;
+}
 
 export function GraphView() {
   const { state, dispatch } = useStore();
@@ -30,6 +34,25 @@ export function GraphView() {
   const [centerForce, setCenterForce] = useState(0.0004);
   const [groupPull, setGroupPull] = useState(0.004);
   const [groupSpread, setGroupSpread] = useState(280);
+  const [groupColors, setGroupColors] = useState<Record<string, string>>({});
+  const [selectedGroup, setSelectedGroup] = useState('root');
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(graphColorKey(state.activeVaultId));
+      setGroupColors(raw ? JSON.parse(raw) as Record<string, string> : {});
+    } catch {
+      setGroupColors({});
+    }
+  }, [state.activeVaultId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(graphColorKey(state.activeVaultId), JSON.stringify(groupColors));
+    } catch {
+      // ignore
+    }
+  }, [groupColors, state.activeVaultId]);
 
   const buildGraph = useCallback(() => {
     const links: Record<string, Set<string>> = {};
@@ -277,14 +300,6 @@ export function GraphView() {
         const isActive = state.activeNoteId === e.from || state.activeNoteId === e.to;
         const isSelectedEdge = selectedRef.current === e.from || selectedRef.current === e.to;
 
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const mx = (a.x + b.x) / 2;
-        const my = (a.y + b.y) / 2;
-        const bend = Math.min(26, Math.max(-26, (dx + dy) * 0.02));
-        const nx = -dy * 0.08;
-        const ny = dx * 0.08;
-
         ctx!.beginPath();
         ctx!.strokeStyle = isHover
           ? `${theme.accentHover}cc`
@@ -295,7 +310,7 @@ export function GraphView() {
           : 'rgba(140,156,180,0.16)';
         ctx!.lineWidth = isSelectedEdge ? 1.6 : isActive ? 1.2 : isHover ? 1 : 0.6;
         ctx!.moveTo(a.x, a.y);
-        ctx!.quadraticCurveTo(mx + nx + bend, my + ny - bend, b.x, b.y);
+        ctx!.lineTo(b.x, b.y);
         ctx!.stroke();
       }
 
@@ -310,9 +325,7 @@ export function GraphView() {
         const isHover = n.id === hoverRef.current;
         const isSelected = n.id === selectedRef.current;
         const dimmed = queryLower && !matchesFilter(n);
-        const groupSeed = [...n.group].reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
-        const hue = groupSeed % 360;
-        const groupColor = `hsla(${hue}, 45%, 62%, 0.85)`;
+        const groupColor = groupColors[n.group];
 
         // Outer glow for active
         if (isActive) {
@@ -338,11 +351,15 @@ export function GraphView() {
           ctx!.strokeStyle = theme.accentHover;
           ctx!.lineWidth = 1;
           ctx!.fill(); ctx!.stroke();
-        } else if (n.conns > 0) {
+        } else if (groupColor) {
           ctx!.fillStyle = groupColor;
-          ctx!.globalAlpha = 0.45 + Math.min(n.conns, 8) * 0.05;
+          ctx!.globalAlpha = 0.9;
           ctx!.fill();
           ctx!.globalAlpha = 1;
+        } else if (n.conns > 0) {
+          const shade = Math.min(215, 120 + n.conns * 10);
+          ctx!.fillStyle = `rgba(${shade},${shade},${shade},0.92)`;
+          ctx!.fill();
         } else {
           ctx!.fillStyle = 'rgba(120,130,145,0.28)';
           ctx!.fill();
@@ -495,51 +512,75 @@ export function GraphView() {
 
       {/* Search filter + depth */}
       <div style={{ position: 'absolute', top: 48, left: 16, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', maxWidth: '70vw' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 6, padding: '4px 8px' }}>
-          <Search size={12} style={{ color: '#444' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px' }}>
+          <Search size={12} style={{ color: 'var(--text-dim)' }} />
           <input type="text" placeholder="Filter nodes..." value={filterQuery}
             onChange={e => setFilterQuery(e.target.value)}
-            style={{ background: 'none', border: 'none', color: '#888', fontSize: 11, outline: 'none', width: 120 }} />
+            style={{ background: 'none', border: 'none', color: 'var(--text)', fontSize: 11, outline: 'none', width: 120 }} />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 6, padding: '4px 8px' }}>
-          <span style={{ fontSize: 9, color: '#444' }}>Depth</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px' }}>
+          <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>Depth</span>
           <input type="range" min={0} max={6} value={depthFilter}
             onChange={e => setDepthFilter(parseInt(e.target.value))}
             style={{ width: 60, accentColor: '#555' }} />
-          <span style={{ fontSize: 9, color: '#555', width: 12 }}>{depthFilter === 0 ? '∞' : depthFilter}</span>
+          <span style={{ fontSize: 9, color: 'var(--text-secondary)', width: 12 }}>{depthFilter === 0 ? '∞' : depthFilter}</span>
         </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 6, padding: '4px 8px', fontSize: 10, color: '#666' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', fontSize: 10, color: 'var(--text-secondary)' }}>
           <input type="checkbox" checked={showAllLabels} onChange={e => setShowAllLabels(e.target.checked)} />
           Show all titles
         </label>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 6, padding: '4px 8px' }}>
-          <span style={{ fontSize: 9, color: '#444' }}>Node</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px' }}>
+          <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>Node</span>
           <input type="range" min={0.7} max={2} step={0.1} value={nodeScale}
             onChange={e => setNodeScale(parseFloat(e.target.value))}
             style={{ width: 74, accentColor: '#555' }} />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 6, padding: '4px 8px' }}>
-          <span style={{ fontSize: 9, color: '#444' }}>Distance</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px' }}>
+          <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>Distance</span>
           <input type="range" min={90} max={320} step={5} value={linkDistance}
             onChange={e => setLinkDistance(parseInt(e.target.value))}
             style={{ width: 74, accentColor: '#555' }} />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 6, padding: '4px 8px' }}>
-          <span style={{ fontSize: 9, color: '#444' }}>Center</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px' }}>
+          <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>Center</span>
           <input type="range" min={0.0001} max={0.0015} step={0.0001} value={centerForce}
             onChange={e => setCenterForce(parseFloat(e.target.value))}
             style={{ width: 74, accentColor: '#555' }} />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 6, padding: '4px 8px' }}>
-          <span style={{ fontSize: 9, color: '#444' }}>Groups</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px' }}>
+          <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>Groups</span>
           <input type="range" min={140} max={520} step={10} value={groupSpread}
             onChange={e => setGroupSpread(parseInt(e.target.value))}
             style={{ width: 74, accentColor: '#555' }} />
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px' }}>
+          <Palette size={12} style={{ color: 'var(--text-dim)' }} />
+          <select value={selectedGroup} onChange={e => setSelectedGroup(e.target.value)} style={{ background: 'none', border: 'none', color: 'var(--text)', fontSize: 11, outline: 'none' }}>
+            {['root', ...state.folders.map(folder => `folder:${folder.name}`)].map(group => (
+              <option key={group} value={group}>{group.replace(/^folder:/, '')}</option>
+            ))}
+          </select>
+          <input
+            type="color"
+            value={groupColors[selectedGroup] || '#8fa1bf'}
+            onChange={e => setGroupColors(prev => ({ ...prev, [selectedGroup]: e.target.value }))}
+            style={{ width: 20, height: 20, border: 'none', background: 'none', padding: 0 }}
+          />
+          <button
+            onClick={() => setGroupColors(prev => {
+              const next = { ...prev };
+              delete next[selectedGroup];
+              return next;
+            })}
+            style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', fontSize: 10 }}
+          >
+            Clear
+          </button>
+        </div>
       </div>
 
       {/* Controls */}
-      <div style={{ position: 'absolute', top: 48, right: 16, display: 'flex', flexDirection: 'column', gap: 2, background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 8, padding: 4 }}>
+      <div style={{ position: 'absolute', top: 48, right: 16, display: 'flex', flexDirection: 'column', gap: 2, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 4 }}>
         {[
           { icon: <ZoomIn size={14} />, action: () => { zoomRef.current = Math.min(5, zoomRef.current + 0.2); }, title: 'Zoom in' },
           { icon: <ZoomOut size={14} />, action: () => { zoomRef.current = Math.max(0.15, zoomRef.current - 0.2); }, title: 'Zoom out' },
@@ -548,27 +589,27 @@ export function GraphView() {
           { icon: <Play size={14} />, action: animate, title: 'Animate' },
         ].map((btn, i) => (
           <button key={i} onClick={btn.action} title={btn.title}
-            style={{ width: 32, height: 32, background: 'none', border: 'none', color: '#555', cursor: 'pointer', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#141414'; e.currentTarget.style.color = '#999'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#555'; }}>
+            style={{ width: 32, height: 32, background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-dim)'; }}>
             {btn.icon}
           </button>
         ))}
       </div>
 
       {/* Legend */}
-      <div style={{ position: 'absolute', bottom: 16, left: 16, background: 'rgba(10,10,10,0.9)', border: '1px solid #1a1a1a', borderRadius: 6, padding: '8px 12px', fontSize: 9, color: '#444' }}>
-        <div style={{ marginBottom: 4, fontWeight: 600, color: '#555' }}>Legend</div>
+      <div style={{ position: 'absolute', bottom: 16, left: 16, background: 'color-mix(in srgb, var(--bg-surface) 92%, transparent)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', fontSize: 9, color: 'var(--text-dim)' }}>
+        <div style={{ marginBottom: 4, fontWeight: 600, color: 'var(--text-secondary)' }}>Legend</div>
         <div className="flex items-center gap-2" style={{ marginBottom: 2 }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ccc' }} /> Active note
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--text)' }} /> Active note
         </div>
         <div className="flex items-center gap-2" style={{ marginBottom: 2 }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#888' }} /> Connected
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#9aa6b6' }} /> Connected
         </div>
         <div className="flex items-center gap-2" style={{ marginBottom: 2 }}>
-          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#222' }} /> Orphan
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(120,130,145,0.35)' }} /> Orphan
         </div>
-        <div style={{ marginTop: 4, color: '#333' }}>Scroll to zoom · Drag to pan</div>
+        <div style={{ marginTop: 4, color: 'var(--text-dim)' }}>Straight links · Scroll to zoom · Drag to pan</div>
       </div>
     </div>
   );
