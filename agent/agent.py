@@ -112,6 +112,106 @@ def needs_internet(query):
     return any(kw in q for kw in keywords)
 
 
+def stream_text_chunks(text, chunk_size=3):
+    """Yield SSE chunks for plain text responses."""
+    for i in range(0, len(text), chunk_size):
+        chunk = text[i:i + chunk_size]
+        yield f"data: {json.dumps({'content': chunk})}\n\n"
+
+
+def resolve_openai_base_url(provider, api_base_url):
+    """Resolve chat completion endpoint for OpenAI-compatible APIs."""
+    if provider == "openai":
+        base = (api_base_url or "https://api.openai.com/v1").rstrip("/")
+    else:
+        base = (api_base_url or "").rstrip("/")
+        if not base:
+            raise ValueError("API base URL is required for openai-compatible provider")
+
+    if base.endswith("/chat/completions"):
+        return base
+    return f"{base}/chat/completions"
+
+
+def call_openai_compatible(provider, api_key, api_base_url, model, messages, temperature):
+    """Call OpenAI/OpenAI-compatible chat completion API."""
+    endpoint = resolve_openai_base_url(provider, api_base_url)
+    if not model:
+        model = "gpt-4o-mini" if provider == "openai" else ""
+    if not model:
+        raise ValueError("Model is required for openai-compatible provider")
+
+    resp = requests.post(
+        endpoint,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+        },
+        timeout=120,
+    )
+    if not resp.ok:
+        detail = resp.text[:500]
+        raise RuntimeError(f"Provider API error ({resp.status_code}): {detail}")
+
+    data = resp.json()
+    choices = data.get("choices", [])
+    if not choices:
+        raise RuntimeError("Provider API returned no choices")
+
+    content = choices[0].get("message", {}).get("content", "")
+    if isinstance(content, list):
+        content = "\n".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+    return str(content or "")
+
+
+def call_gemini(api_key, model, system_content, history, query, temperature):
+    """Call Gemini generateContent API."""
+    selected_model = model or "gemini-1.5-flash"
+    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{selected_model}:generateContent?key={api_key}"
+
+    contents = []
+    for h in history[-10:]:
+        role = h.get("role", "user")
+        text = h.get("content", "")
+        if not text:
+            continue
+        contents.append({
+            "role": "model" if role == "assistant" else "user",
+            "parts": [{"text": text}],
+        })
+    contents.append({"role": "user", "parts": [{"text": query}]})
+
+    resp = requests.post(
+        endpoint,
+        headers={"Content-Type": "application/json"},
+        json={
+            "systemInstruction": {"parts": [{"text": system_content}]},
+            "contents": contents,
+            "generationConfig": {
+                "temperature": temperature,
+            },
+        },
+        timeout=120,
+    )
+    if not resp.ok:
+        detail = resp.text[:500]
+        raise RuntimeError(f"Gemini API error ({resp.status_code}): {detail}")
+
+    data = resp.json()
+    candidates = data.get("candidates", [])
+    if not candidates:
+        raise RuntimeError("Gemini API returned no candidates")
+
+    parts = candidates[0].get("content", {}).get("parts", [])
+    text = "\n".join(part.get("text", "") for part in parts if isinstance(part, dict))
+    return text or ""
+
+
 # ── Memory Builder ────────────────────────────────────────────
 
 def build_memory(notes, active_note_id, query, max_notes=10):
@@ -199,7 +299,8 @@ def build_memory(notes, active_note_id, query, max_notes=10):
         if graph[nid]:
             conn_names = [note_map[cid]["title"] for cid in graph[nid] if cid in note_map]
             if conn_names:
-                lines.append(f'"{note_map[nid]["title"]}" → {", ".join(f\'"{cn}"\' for cn in conn_names)}')
+                quoted_conn_names = [f'"{cn}"' for cn in conn_names]
+                lines.append(f'"{note_map[nid]["title"]}" → {", ".join(quoted_conn_names)}')
     lines.append("")
 
     # Active note
@@ -372,7 +473,10 @@ def chat():
     history = data.get("history", [])
 
     model = settings.get("model", "")
+    provider = str(settings.get("provider", "ollama") or "ollama").strip().lower()
     ollama_url = settings.get("ollamaUrl", OLLAMA_URL)
+    api_key = str(settings.get("apiKey", "") or "").strip()
+    api_base_url = str(settings.get("apiBaseUrl", "") or "").strip()
     temperature = settings.get("temperature", 0.7)
     max_context = settings.get("maxContextNotes", 10)
     internet_access = settings.get("internetAccess", True)
@@ -387,7 +491,7 @@ def chat():
         web_results = web_search(query)
 
     # If no model, use built-in
-    if not model or not model.strip():
+    if provider == "ollama" and (not model or not model.strip()):
         response_text = builtin_response(query, notes, active_note_id)
         if web_results:
             response_text += f"\n\n---\n*Web search was performed but no AI model to process it. Install Ollama for full AI + web.*"
@@ -416,6 +520,51 @@ def chat():
     for h in history[-10:]:
         messages.append({"role": h.get("role", "user"), "content": h.get("content", "")})
     messages.append({"role": "user", "content": query})
+
+    # External providers (OpenAI / Gemini / OpenAI-compatible)
+    if provider != "ollama":
+        def stream_external():
+            try:
+                if not api_key:
+                    fallback = builtin_response(query, notes, active_note_id)
+                    fallback += "\n\n*Missing API key. Add it in AI settings to use this provider.*"
+                    for chunk in stream_text_chunks(fallback):
+                        yield chunk
+                    yield f"data: {json.dumps({'done': True, 'error': 'Missing API key', 'usedOllama': False})}\n\n"
+                    return
+
+                if provider in ("openai", "openai-compatible"):
+                    response_text = call_openai_compatible(
+                        provider=provider,
+                        api_key=api_key,
+                        api_base_url=api_base_url,
+                        model=model,
+                        messages=messages,
+                        temperature=temperature,
+                    )
+                elif provider == "gemini":
+                    response_text = call_gemini(
+                        api_key=api_key,
+                        model=model,
+                        system_content=system_content,
+                        history=history,
+                        query=query,
+                        temperature=temperature,
+                    )
+                else:
+                    raise RuntimeError(f"Unsupported provider: {provider}")
+
+                for chunk in stream_text_chunks(response_text):
+                    yield chunk
+                yield f"data: {json.dumps({'done': True, 'webResults': web_results or None, 'usedOllama': True})}\n\n"
+            except Exception as e:
+                fallback = builtin_response(query, notes, active_note_id)
+                fallback += f"\n\n*Provider request failed: {str(e)}*"
+                for chunk in stream_text_chunks(fallback):
+                    yield chunk
+                yield f"data: {json.dumps({'done': True, 'error': str(e), 'usedOllama': False})}\n\n"
+
+        return Response(stream_external(), mimetype="text/event-stream")
 
     def stream_ollama():
         try:

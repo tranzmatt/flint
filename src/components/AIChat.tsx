@@ -45,14 +45,19 @@ export function AIChat() {
       const agentUp = await checkAgentStatus();
       if (agentUp) {
         setAgentStatus('agent-up');
-        const oStatus = await checkOllamaStatus(aiSettings.ollamaUrl);
-        setOllamaStatus(oStatus);
-        if (oStatus === 'connected') {
-          const fetchedModels = await fetchOllamaModels(aiSettings.ollamaUrl);
-          setModels(fetchedModels);
-          if (fetchedModels.length > 0 && (!aiSettings.model || !fetchedModels.includes(aiSettings.model))) {
-            dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { model: fetchedModels[0] } });
+        if (aiSettings.provider === 'ollama') {
+          const oStatus = await checkOllamaStatus(aiSettings.ollamaUrl);
+          setOllamaStatus(oStatus);
+          if (oStatus === 'connected') {
+            const fetchedModels = await fetchOllamaModels(aiSettings.ollamaUrl);
+            setModels(fetchedModels);
+            if (fetchedModels.length > 0 && (!aiSettings.model || !fetchedModels.includes(aiSettings.model))) {
+              dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { model: fetchedModels[0] } });
+            }
           }
+        } else {
+          setOllamaStatus('disconnected');
+          setModels([]);
         }
       } else {
         setAgentStatus('agent-down');
@@ -63,7 +68,7 @@ export function AIChat() {
     check();
     const interval = setInterval(check, 10000);
     return () => clearInterval(interval);
-  }, [aiSettings.ollamaUrl, aiSettings.model, dispatch]);
+  }, [aiSettings.ollamaUrl, aiSettings.model, aiSettings.provider, dispatch]);
 
   // Scroll to bottom
   useEffect(() => {
@@ -71,6 +76,8 @@ export function AIChat() {
   }, [aiMessages, streamContent]);
 
   const activeNote = notes.find(n => n.id === activeNoteId);
+  const isApiProvider = aiSettings.provider !== 'ollama';
+  const hasApiConfig = !!aiSettings.apiKey && !!aiSettings.model;
 
   const sendMessage = useCallback(async () => {
     const trimmed = input.trim();
@@ -153,7 +160,9 @@ export function AIChat() {
   };
 
   const isAgentMode = agentStatus === 'agent-up';
-  const isOllamaMode = isAgentMode && ollamaStatus === 'connected' && !!aiSettings.model;
+  const isOllamaMode = isAgentMode && aiSettings.provider === 'ollama' && ollamaStatus === 'connected' && !!aiSettings.model;
+  const isCloudMode = isAgentMode && isApiProvider && hasApiConfig;
+  const providerName = aiSettings.provider === 'openai' ? 'OpenAI' : aiSettings.provider === 'gemini' ? 'Gemini' : aiSettings.provider === 'openai-compatible' ? 'Custom API' : 'Ollama';
 
   return (
     <div style={{
@@ -175,12 +184,14 @@ export function AIChat() {
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: '#aaa' }}>Flint AI</div>
-          <div className="flex items-center gap-1" style={{ fontSize: 10, color: isOllamaMode ? '#5a5' : isAgentMode ? '#855' : '#655' }}>
-            {isOllamaMode ? <Wifi size={8} /> : isAgentMode ? <Server size={8} /> : <Cpu size={8} />}
+          <div className="flex items-center gap-1" style={{ fontSize: 10, color: isOllamaMode || isCloudMode ? '#5a5' : isAgentMode ? '#855' : '#655' }}>
+            {(isOllamaMode || isCloudMode) ? <Wifi size={8} /> : isAgentMode ? <Server size={8} /> : <Cpu size={8} />}
             {isOllamaMode
               ? `Ollama · ${aiSettings.model}`
+              : isCloudMode
+              ? `${providerName} · ${aiSettings.model}`
               : isAgentMode
-              ? 'Agent up · No Ollama'
+              ? `${providerName} not configured`
               : 'Browser mode'}
           </div>
         </div>
@@ -235,17 +246,47 @@ export function AIChat() {
           <div style={{ fontSize: 10, color: '#555', marginBottom: 8, padding: '4px 8px', background: '#0a0a0a', borderRadius: 4, border: '1px solid #1a1a1a' }}>
             {isOllamaMode
               ? `Agent + Ollama (${aiSettings.model}) — full AI`
+              : isCloudMode
+              ? `Agent + ${providerName} (${aiSettings.model}) — full AI`
               : isAgentMode
-              ? `Agent running — no Ollama. Install: ollama pull llama3.2`
+              ? isApiProvider
+                ? `Agent running — add API key + model for ${providerName}`
+                : `Agent running — no Ollama. Install: ollama pull llama3.2`
               : `Agent not running. Run: python3 ~/.flint/agent/agent.py`}
           </div>
+          <ConfigField label="Provider">
+            <select value={aiSettings.provider}
+              onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { provider: e.target.value as 'ollama' | 'openai' | 'gemini' | 'openai-compatible' } })}
+              style={{ ...inputStyle, fontSize: 11 }}>
+              <option value="ollama">Ollama (local)</option>
+              <option value="openai">OpenAI</option>
+              <option value="gemini">Gemini</option>
+              <option value="openai-compatible">OpenAI-compatible</option>
+            </select>
+          </ConfigField>
           <ConfigField label="Ollama URL">
             <input type="text" value={aiSettings.ollamaUrl}
               onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { ollamaUrl: e.target.value } })}
               style={{ ...inputStyle, fontSize: 11 }} />
           </ConfigField>
+          {isApiProvider && (
+            <ConfigField label="API key">
+              <input type="password" value={aiSettings.apiKey}
+                onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { apiKey: e.target.value } })}
+                placeholder={aiSettings.provider === 'openai' ? 'sk-...' : aiSettings.provider === 'gemini' ? 'AIza...' : 'Provider API key'}
+                style={{ ...inputStyle, fontSize: 11 }} />
+            </ConfigField>
+          )}
+          {aiSettings.provider === 'openai-compatible' && (
+            <ConfigField label="API base">
+              <input type="text" value={aiSettings.apiBaseUrl}
+                onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { apiBaseUrl: e.target.value } })}
+                placeholder="https://api.provider.com/v1"
+                style={{ ...inputStyle, fontSize: 11 }} />
+            </ConfigField>
+          )}
           <ConfigField label="Model">
-            {models.length > 0 ? (
+            {aiSettings.provider === 'ollama' && models.length > 0 ? (
               <select value={aiSettings.model}
                 onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { model: e.target.value } })}
                 style={{ ...inputStyle, fontSize: 11 }}>
@@ -255,7 +296,7 @@ export function AIChat() {
             ) : (
               <input type="text" value={aiSettings.model}
                 onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { model: e.target.value } })}
-                placeholder="e.g. llama3.2, mistral, codellama"
+                placeholder={aiSettings.provider === 'openai' ? 'e.g. gpt-4o-mini' : aiSettings.provider === 'gemini' ? 'e.g. gemini-1.5-flash' : aiSettings.provider === 'openai-compatible' ? 'Provider model id' : 'e.g. llama3.2, mistral, codellama'}
                 style={{ ...inputStyle, fontSize: 11 }} />
             )}
           </ConfigField>
@@ -324,8 +365,12 @@ export function AIChat() {
             <div style={{ fontSize: 11, color: '#444', lineHeight: 1.6, maxWidth: 260, margin: '0 auto 4px' }}>
               {isOllamaMode
                 ? `Powered by ${aiSettings.model} with memory of your ${notes.length} notes.`
+                : isCloudMode
+                ? `Powered by ${providerName} with memory of your ${notes.length} notes.`
                 : isAgentMode
-                ? 'Agent running. Install an Ollama model for full AI.'
+                ? isApiProvider
+                  ? `Agent running. Add API key + model for ${providerName}.`
+                  : 'Agent running. Install an Ollama model for full AI.'
                 : 'I search your notes to answer. Start the Python agent for full AI + Ollama.'}
             </div>
             <div className="flex items-center justify-center gap-3" style={{ fontSize: 9, color: '#333', marginBottom: 16 }}>
@@ -434,6 +479,8 @@ export function AIChat() {
                   <Zap size={9} style={{ display: 'inline', marginRight: 4 }} />
                   {isOllamaMode
                     ? `Thinking with ${aiSettings.model}...`
+                    : isCloudMode
+                    ? `Thinking with ${providerName}...`
                     : isAgentMode
                     ? 'Processing via agent...'
                     : `Searching ${memoryStats.notes} notes...`}
@@ -473,6 +520,8 @@ export function AIChat() {
             placeholder={
               isOllamaMode
                 ? 'Ask anything (AI + notes + web)...'
+                : isCloudMode
+                ? `Ask anything (${providerName} + notes + web)...`
                 : isAgentMode
                 ? 'Ask about your notes...'
                 : 'Ask (browser search)...'

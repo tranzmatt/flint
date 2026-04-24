@@ -40,6 +40,8 @@ export function SettingsPanel() {
   const [agentUp, setAgentUp] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [customModel, setCustomModel] = useState('');
+  const isApiProvider = state.aiSettings.provider !== 'ollama';
+  const isOpenAICompatible = state.aiSettings.provider === 'openai-compatible';
 
   useEffect(() => { saveSettings(settings); }, [settings]);
 
@@ -55,19 +57,26 @@ export function SettingsPanel() {
     const check = async () => {
       const aUp = await checkAgentStatus();
       setAgentUp(aUp);
-      const status = await checkOllamaStatus(state.aiSettings.ollamaUrl);
-      setOllamaStatus(status);
-      if (status === 'connected') {
-        const fetchedModels = await fetchOllamaModels(state.aiSettings.ollamaUrl);
-        setModels(fetchedModels);
-        // Auto-select first model if none selected
-        if (fetchedModels.length > 0 && !state.aiSettings.model) {
-          dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { model: fetchedModels[0] } });
+      if (state.aiSettings.provider === 'ollama') {
+        const status = await checkOllamaStatus(state.aiSettings.ollamaUrl);
+        setOllamaStatus(status);
+        if (status === 'connected') {
+          const fetchedModels = await fetchOllamaModels(state.aiSettings.ollamaUrl);
+          setModels(fetchedModels);
+          // Auto-select first model if none selected
+          if (fetchedModels.length > 0 && !state.aiSettings.model) {
+            dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { model: fetchedModels[0] } });
+          }
+        } else {
+          setModels([]);
         }
+      } else {
+        setOllamaStatus('disconnected');
+        setModels([]);
       }
     };
     check();
-  }, [state.aiSettings.ollamaUrl, state.aiSettings.model, dispatch]);
+  }, [state.aiSettings.ollamaUrl, state.aiSettings.model, state.aiSettings.provider, dispatch]);
 
   const close = () => dispatch({ type: 'TOGGLE_SETTINGS' });
 
@@ -114,14 +123,18 @@ export function SettingsPanel() {
     try {
       const aUp = await checkAgentStatus();
       setAgentUp(aUp);
-      const status = await checkOllamaStatus(state.aiSettings.ollamaUrl);
-      setOllamaStatus(status);
-      if (status === 'connected') {
-        const fetchedModels = await fetchOllamaModels(state.aiSettings.ollamaUrl);
-        setModels(fetchedModels);
-        if (fetchedModels.length > 0 && !state.aiSettings.model) {
-          dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { model: fetchedModels[0] } });
+      if (state.aiSettings.provider === 'ollama') {
+        const status = await checkOllamaStatus(state.aiSettings.ollamaUrl);
+        setOllamaStatus(status);
+        if (status === 'connected') {
+          const fetchedModels = await fetchOllamaModels(state.aiSettings.ollamaUrl);
+          setModels(fetchedModels);
+          if (fetchedModels.length > 0 && !state.aiSettings.model) {
+            dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { model: fetchedModels[0] } });
+          }
         }
+      } else {
+        setModels([]);
       }
     } catch {
       setOllamaStatus('disconnected');
@@ -327,12 +340,12 @@ export function SettingsPanel() {
                 <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
                   <div className="flex items-center gap-2">
                     <Brain size={16} style={{ color: '#666' }} />
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#888' }}>AI Agent + Ollama</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#888' }}>AI Agent</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1" style={{ fontSize: 10, color: ollamaStatus === 'connected' ? '#5a5' : ollamaStatus === 'checking' ? '#555' : '#655' }}>
-                      {ollamaStatus === 'connected' ? <Wifi size={10} /> : ollamaStatus === 'checking' ? <RefreshCw size={10} className="animate-spin" /> : <WifiOff size={10} />}
-                      {ollamaStatus === 'connected' ? 'Connected' : ollamaStatus === 'checking' ? 'Checking...' : 'Disconnected'}
+                    <div className="flex items-center gap-1" style={{ fontSize: 10, color: agentUp ? '#5a5' : '#655' }}>
+                      {agentUp ? <Wifi size={10} /> : <WifiOff size={10} />}
+                      {agentUp ? 'Agent Running' : 'Agent Down'}
                     </div>
                     <button onClick={refreshModels} style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', display: 'flex' }}>
                       <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
@@ -342,24 +355,55 @@ export function SettingsPanel() {
                 <div style={{ fontSize: 11, color: '#444', lineHeight: 1.6 }}>
                   {!agentUp
                     ? 'Python agent not running. Run: python3 ~/.flint/agent/agent.py'
-                    : ollamaStatus === 'connected'
+                    : state.aiSettings.provider === 'ollama' && ollamaStatus === 'connected'
                     ? `Agent running. Found ${models.length} model${models.length !== 1 ? 's' : ''}: ${models.slice(0, 3).join(', ')}${models.length > 3 ? '...' : ''}`
-                    : ollamaStatus === 'disconnected'
+                    : state.aiSettings.provider === 'ollama' && ollamaStatus === 'disconnected'
                     ? 'Agent running but Ollama not found. Start with: ollama serve'
-                    : 'Checking connection...'}
+                    : state.aiSettings.provider === 'ollama'
+                    ? 'Checking connection...'
+                    : 'Agent running. Requests will use your selected API provider and key.'}
                 </div>
               </div>
 
+              <SettingRow icon={<Brain size={14} />} label="Provider">
+                <select value={state.aiSettings.provider}
+                  onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { provider: e.target.value as 'ollama' | 'openai' | 'gemini' | 'openai-compatible' } })}
+                  style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }}>
+                  <option value="ollama">Ollama (local)</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="gemini">Google Gemini</option>
+                  <option value="openai-compatible">Other OpenAI-compatible API</option>
+                </select>
+              </SettingRow>
+
               {/* Ollama URL */}
-              <SettingRow icon={<Wifi size={14} />} label="Ollama URL">
+              <SettingRow icon={<Wifi size={14} />} label={isApiProvider ? 'Ollama URL (fallback)' : 'Ollama URL'}>
                 <input type="text" value={state.aiSettings.ollamaUrl}
                   onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { ollamaUrl: e.target.value } })}
                   style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }} />
               </SettingRow>
 
+              {isApiProvider && (
+                <SettingRow icon={<Brain size={14} />} label="API key">
+                  <input type="password" value={state.aiSettings.apiKey}
+                    onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { apiKey: e.target.value } })}
+                    placeholder={state.aiSettings.provider === 'openai' ? 'sk-...' : state.aiSettings.provider === 'gemini' ? 'AIza...' : 'Paste provider key'}
+                    style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }} />
+                </SettingRow>
+              )}
+
+              {isOpenAICompatible && (
+                <SettingRow icon={<Globe size={14} />} label="API base URL">
+                  <input type="text" value={state.aiSettings.apiBaseUrl}
+                    onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { apiBaseUrl: e.target.value } })}
+                    placeholder="https://api.provider.com/v1"
+                    style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }} />
+                </SettingRow>
+              )}
+
               {/* Model — works with ANY model */}
               <SettingRow icon={<Brain size={14} />} label="Model">
-                {models.length > 0 ? (
+                {state.aiSettings.provider === 'ollama' && models.length > 0 ? (
                   <div className="flex items-center gap-2" style={{ flex: 1 }}>
                     <select value={state.aiSettings.model}
                       onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { model: e.target.value } })}
@@ -372,14 +416,14 @@ export function SettingsPanel() {
                   <div className="flex items-center gap-2" style={{ flex: 1 }}>
                     <input type="text" value={state.aiSettings.model}
                       onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { model: e.target.value } })}
-                      placeholder="e.g. llama3.2, mistral, codellama, phi3"
+                      placeholder={state.aiSettings.provider === 'openai' ? 'e.g. gpt-4o-mini' : state.aiSettings.provider === 'gemini' ? 'e.g. gemini-1.5-flash' : state.aiSettings.provider === 'openai-compatible' ? 'Provider model id' : 'e.g. llama3.2, mistral, codellama, phi3'}
                       style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }} />
                   </div>
                 )}
               </SettingRow>
 
               {/* Custom model input for when models are detected */}
-              {models.length > 0 && (
+              {state.aiSettings.provider === 'ollama' && models.length > 0 && (
                 <div className="flex items-center gap-2">
                   <span style={{ fontSize: 10, color: '#444', width: 140, flexShrink: 0 }}>Use custom model</span>
                   <input type="text" value={customModel}
@@ -440,13 +484,15 @@ export function SettingsPanel() {
               <div style={{ padding: 12, background: '#060606', borderRadius: 6, border: '1px solid #151515' }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#555', marginBottom: 6 }}>How Flint AI works</div>
                 <div style={{ fontSize: 10, color: '#3a3a3a', lineHeight: 1.6 }}>
-                  • Connects to <strong style={{ color: '#555' }}>Ollama</strong> running locally on your machine<br />
+                  • Builds responses from your <strong style={{ color: '#555' }}>note memory + graph links</strong><br />
+                  • Works with <strong style={{ color: '#555' }}>Ollama, OpenAI, Gemini, and OpenAI-compatible APIs</strong><br />
+                  • Paste your API key in settings when using cloud providers<br />
+                  • Requests are routed through the local <strong style={{ color: '#555' }}>Python agent</strong><br />
                   • Uses your <strong style={{ color: '#555' }}>notes as memory</strong> — builds context from note content<br />
                   • Follows <strong style={{ color: '#555' }}>graph connections</strong> — linked notes provide deeper context<br />
                   • <strong style={{ color: '#555' }}>Internet access</strong> — searches Wikipedia for real-time information<br />
-                  • All AI processing is <strong style={{ color: '#555' }}>100% local</strong> via Ollama<br />
-                  • Works with <strong style={{ color: '#555' }}>any model</strong>: llama3.2, mistral, codellama, phi3, gemma, etc.<br />
-                  • Install models: <code style={{ background: '#111', padding: '1px 4px', borderRadius: 2 }}>ollama pull llama3.2</code>
+                  • You can still run <strong style={{ color: '#555' }}>100% local</strong> with Ollama only<br />
+                  • Install local models: <code style={{ background: '#111', padding: '1px 4px', borderRadius: 2 }}>ollama pull llama3.2</code>
                 </div>
               </div>
             </div>

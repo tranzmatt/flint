@@ -2,8 +2,34 @@ import { createContext, useContext, useReducer, useEffect, useRef, useCallback, 
 import type { Note, Folder, Vault, AppState, ChatMessage, AISettings } from './types';
 
 const STORAGE_KEY = 'flint-data';
+const SUPPORTED_AI_PROVIDERS = ['ollama', 'openai', 'gemini', 'openai-compatible'] as const;
+
+const DEFAULT_AI_SETTINGS: AISettings = {
+  provider: 'ollama',
+  ollamaUrl: 'http://localhost:11434',
+  apiKey: '',
+  apiBaseUrl: '',
+  model: '',
+  maxContextNotes: 8,
+  temperature: 0.7,
+  internetAccess: true,
+  systemPrompt: 'You are Flint AI, an intelligent assistant embedded in the Flint note-taking app. You have access to the user\'s notes as your memory. Use this knowledge to provide helpful, contextual answers. When referencing notes, mention them by name. Think carefully based on the connected notes.',
+};
 
 function generateId() { return Math.random().toString(36).substring(2, 11) + Date.now().toString(36); }
+
+function isSupportedProvider(v: unknown): v is AISettings['provider'] {
+  return typeof v === 'string' && (SUPPORTED_AI_PROVIDERS as readonly string[]).includes(v);
+}
+
+function normalizeAISettings(raw: unknown): AISettings {
+  const partial = (typeof raw === 'object' && raw !== null ? raw : {}) as Partial<AISettings> & { provider?: unknown };
+  const merged: AISettings = { ...DEFAULT_AI_SETTINGS, ...partial };
+  if (!isSupportedProvider(partial.provider)) {
+    merged.provider = 'ollama';
+  }
+  return merged;
+}
 
 function saveState(state: AppState) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { console.warn('Save failed:', e); }
@@ -13,11 +39,15 @@ function loadState(): AppState | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(raw) as Partial<AppState>;
     if (parsed && parsed.vaults) {
       // hasFolderHandle is runtime state — always reset on load
-      parsed.hasFolderHandle = false;
-      return parsed;
+      const normalized = {
+        ...parsed,
+        hasFolderHandle: false,
+        aiSettings: normalizeAISettings(parsed.aiSettings),
+      } as AppState;
+      return normalized;
     }
   } catch { /* ignore */ }
   return null;
@@ -257,14 +287,7 @@ function getInitialState(): AppState {
     showGraphView: false, showSearch: false, showCommandPalette: false, settingsOpen: false,
     showAIChat: false,
     aiMessages: [],
-    aiSettings: {
-      ollamaUrl: 'http://localhost:11434',
-      model: '',
-      maxContextNotes: 8,
-      temperature: 0.7,
-      internetAccess: true,
-      systemPrompt: 'You are Flint AI, an intelligent assistant embedded in the Flint note-taking app. You have access to the user\'s notes as your memory. Use this knowledge to provide helpful, contextual answers. When referencing notes, mention them by name. Think carefully based on the connected notes.',
-    },
+    aiSettings: DEFAULT_AI_SETTINGS,
     hasFolderHandle: false,
   };
 }
