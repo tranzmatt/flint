@@ -46,8 +46,13 @@ export interface ChatMessage {
   webResults?: string;
 }
 
+export type AIProvider = 'ollama' | 'openai' | 'gemini' | 'openai-compatible';
+
 export interface AISettings {
+  provider: AIProvider;
   ollamaUrl: string;
+  apiKey: string;
+  apiBaseUrl: string;
   model: string;
   maxContextNotes: number;
   temperature: number;

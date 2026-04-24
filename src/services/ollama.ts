@@ -146,8 +146,11 @@ export async function askFlintAI(
     notes: notesData,
     activeNoteId,
     settings: {
+      provider: settings.provider,
       model: settings.model,
       ollamaUrl: settings.ollamaUrl || DEFAULT_OLLAMA,
+      apiKey: settings.apiKey,
+      apiBaseUrl: settings.apiBaseUrl,
       temperature: settings.temperature,
       maxContextNotes: settings.maxContextNotes,
       internetAccess: settings.internetAccess,
@@ -219,7 +222,7 @@ export async function askFlintAI(
   }
 
   // ── Level 2: Try Direct Ollama ─────────────────────────
-  if (settings.model) {
+  if (settings.provider === 'ollama' && settings.model) {
     try {
       console.log('[Flint AI] Trying direct Ollama with model:', settings.model);
       const ollamaUrl = settings.ollamaUrl || DEFAULT_OLLAMA;

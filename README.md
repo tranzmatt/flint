@@ -16,34 +16,9 @@
 
 ---
 
-https://github.com/user-attachments/assets/8f073bf8-ef44-4ef2-8728-6cf2a7994a3c
+https://github.com/user-attachments/assets/dbd70229-1ea6-499c-9fdd-476cdb581a79
 
 ---
-
-##  Installation
-
-### Prerequisites
-- **Node.js** 18+ — [Install](https://nodejs.org)
-- **Python 3** (for AI Agent) — `sudo apt install python3 python3-pip`
-- **Ollama** (for AI) — [Install](https://ollama.ai) then `ollama pull llama3.2`
-
-After install, Flint appears in your **app menu**. Or run `flint` from terminal.
-### Install with 
-```bash
-git clone https://github.com/Chintanpatel24/flint.git
-cd flint
-bash install.sh
-bash update.sh
-npm audit fix --force
-```
-
-### for devloping ,
-```bash
-git clone --branch test-api --single-branch https://github.com/Chintanpatel24/flint.git
-```
-
----
-
 ## Features
 
 ### Note-Taking
@@ -74,6 +49,26 @@ git clone --branch test-api --single-branch https://github.com/Chintanpatel24/fl
 - **localStorage** for persistence
 - **No external API calls** (except Wikipedia when internet access is enabled)
 - **File System Access API** to open any local folder as a vault
+
+---
+
+##  Installation
+
+### Prerequisites
+- **Node.js** 18+ — [Install](https://nodejs.org)
+- **Python 3** (for AI Agent) — `sudo apt install python3 python3-pip`
+- **Ollama** (for AI) — [Install](https://ollama.ai) then `ollama pull llama3.2`
+
+### Install with 
+```bash
+git clone https://github.com/Chintanpatel24/flint.git
+cd flint
+bash install.sh
+bash update.sh
+npm audit fix --force
+```
+
+After install, Flint appears in your **app menu**. Or run `flint` from terminal.
 
 ---
 
