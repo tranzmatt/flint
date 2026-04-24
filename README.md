@@ -109,3 +109,8 @@ ollama pull llama3.2    # Small, fast
 ollama pull mistral     # Good balance
 ollama pull codellama   # Code-focused
 ```
+
+
+```
+fall back to video is now empty and new video is not recoreded 
+```
