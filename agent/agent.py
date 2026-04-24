@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Flint AI Agent — Local Python Agent with Ollama + Web Search + Note Memory
 Runs on http://localhost:5100
