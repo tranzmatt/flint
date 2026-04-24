@@ -24,29 +24,29 @@ export function Sidebar() {
 
   return (
     <div className="animate-slide-right flex flex-col shrink-0"
-      style={{ width: 260, background: '#0d0d0d', borderRight: '1px solid #1a1a1a' }}>
+      style={{ width: 268, background: 'var(--bg-surface)', borderRight: '1px solid var(--border)', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.03)' }}>
 
       {/* Search */}
-      <div style={{ padding: '8px 10px', borderBottom: '1px solid #1a1a1a' }}>
-        <div className="flex items-center gap-2" style={{ padding: '5px 8px', background: '#080808', border: '1px solid #1a1a1a', borderRadius: 5 }}>
-          <Search size={12} style={{ color: '#444', flexShrink: 0 }} />
+      <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
+        <div className="flex items-center gap-2" style={{ padding: '6px 8px', background: 'var(--bg-deep)', border: '1px solid var(--border)', borderRadius: 7, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02)' }}>
+          <Search size={12} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
           <input type="text" placeholder="Search notes..." value={search} onChange={e => setSearch(e.target.value)}
-            style={{ flex: 1, background: 'none', border: 'none', color: '#bbb', fontSize: 12, outline: 'none' }} />
+            style={{ flex: 1, background: 'none', border: 'none', color: 'var(--text)', fontSize: 12, outline: 'none' }} />
         </div>
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-1" style={{ padding: '6px 10px', borderBottom: '1px solid #1a1a1a' }}>
+      <div className="flex items-center gap-1" style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
         <button onClick={() => createNote()} title="New note"
-          style={{ padding: '3px 8px', background: 'none', border: '1px solid #1a1a1a', color: '#666', fontSize: 11, borderRadius: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#999'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = '#1a1a1a'; e.currentTarget.style.color = '#666'; }}>
+          style={{ padding: '4px 9px', background: 'var(--bg-elevated)', border: '1px solid var(--border-light)', color: 'var(--text-secondary)', fontSize: 11, borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-focus)'; e.currentTarget.style.color = 'var(--text)'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
           <Plus size={11} /> Note
         </button>
         <button onClick={() => setShowNewFolder(true)} title="New folder"
-          style={{ padding: '3px 8px', background: 'none', border: '1px solid #1a1a1a', color: '#666', fontSize: 11, borderRadius: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#999'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = '#1a1a1a'; e.currentTarget.style.color = '#666'; }}>
+          style={{ padding: '4px 9px', background: 'var(--bg-elevated)', border: '1px solid var(--border-light)', color: 'var(--text-secondary)', fontSize: 11, borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-focus)'; e.currentTarget.style.color = 'var(--text)'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
           <FolderPlus size={11} /> Folder
         </button>
       </div>
@@ -158,14 +158,14 @@ function NoteItem({ note, active, indented, onClick, onContext }: { note: { id: 
   return (
     <div className="flex items-center gap-2 cursor-pointer"
       draggable
-      style={{ padding: '4px 12px', paddingLeft: indented ? 28 : 12, background: active ? '#141414' : 'transparent', borderLeft: active ? '2px solid #666' : '2px solid transparent', transition: 'all 0.08s' }}
+      style={{ padding: '5px 12px', paddingLeft: indented ? 28 : 12, background: active ? '#232934' : 'transparent', borderLeft: active ? '2px solid #93a4c0' : '2px solid transparent', transition: 'all 0.08s' }}
       onClick={onClick}
       onDragStart={handleDragStart}
       onContextMenu={onContext}
-      onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#0f0f0f'; }}
+      onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#1d222b'; }}
       onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}>
-      <FileText size={13} style={{ color: active ? '#888' : '#444', flexShrink: 0 }} />
-      <span style={{ fontSize: 12, color: active ? '#ccc' : '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{note.title}</span>
+      <FileText size={13} style={{ color: active ? '#c7d1de' : '#7b8698', flexShrink: 0 }} />
+      <span style={{ fontSize: 12, color: active ? '#eef2f8' : '#b0b9c8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{note.title}</span>
     </div>
   );
 }

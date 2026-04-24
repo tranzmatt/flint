@@ -181,7 +181,7 @@ export function VaultScreen() {
   };
 
   return (
-    <div className="h-screen flex items-center justify-center" style={{ background: '#050505' }}>
+    <div className="h-screen flex items-center justify-center" style={{ background: 'var(--bg-deep)' }}>
       <div className="animate-fade-in" style={{ width: 480, maxWidth: '95vw' }}>
         {/* Logo */}
         <div className="text-center" style={{ marginBottom: 40 }}>
@@ -207,7 +207,11 @@ export function VaultScreen() {
             <div style={{ fontSize: 10, fontWeight: 600, color: '#444', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, padding: '0 4px' }}>
               Your Vaults
             </div>
-            {state.vaults.map(vault => (
+            {state.vaults.map(vault => {
+              const workspace = state.vaultData[vault.id];
+              const noteCount = workspace?.notes.length || 0;
+              const folderCount = workspace?.folders.length || 0;
+              return (
               <div key={vault.id}
                 className="flex items-center gap-3 cursor-pointer"
                 style={{ padding: '12px 14px', borderRadius: 8, marginBottom: 2, background: '#0a0a0a', border: '1px solid #1a1a1a', transition: 'all 0.1s' }}
@@ -229,7 +233,7 @@ export function VaultScreen() {
                     {vault.isFolderVault ? (
                       <span className="flex items-center gap-1"><Folder size={9} /> {vault.folderPath}</span>
                     ) : (
-                      <span>{state.notes.length} notes · {state.folders.length} folders</span>
+                      <span>{noteCount} notes · {folderCount} folders</span>
                     )}
                   </div>
                 </div>
@@ -241,7 +245,7 @@ export function VaultScreen() {
                   <Trash2 size={13} />
                 </button>
               </div>
-            ))}
+            );})}
           </div>
         )}
 

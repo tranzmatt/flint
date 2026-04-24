@@ -218,18 +218,28 @@ export function GraphView() {
       const z = zoomRef.current; const p = panRef.current;
       const nodes = nodesRef.current;
       const edges = edgesRef.current;
+      const css = getComputedStyle(document.body);
+      const theme = {
+        bgBase: css.getPropertyValue('--bg-base').trim() || '#16181d',
+        bgDeep: css.getPropertyValue('--bg-deep').trim() || '#121418',
+        border: css.getPropertyValue('--border').trim() || '#303744',
+        text: css.getPropertyValue('--text').trim() || '#d7dce5',
+        textSecondary: css.getPropertyValue('--text-secondary').trim() || '#a3acba',
+        accent: css.getPropertyValue('--accent').trim() || '#8fa1bf',
+        accentHover: css.getPropertyValue('--accent-hover').trim() || '#b5c0d5',
+      };
 
       ctx!.clearRect(0, 0, w, h);
 
       // Background
       const bg = ctx!.createLinearGradient(0, 0, 0, h);
-      bg.addColorStop(0, '#090909');
-      bg.addColorStop(1, '#050505');
+      bg.addColorStop(0, theme.bgBase);
+      bg.addColorStop(1, theme.bgDeep);
       ctx!.fillStyle = bg;
       ctx!.fillRect(0, 0, w, h);
 
       // Grid dots
-      ctx!.fillStyle = 'rgba(255,255,255,0.025)';
+      ctx!.fillStyle = 'rgba(255,255,255,0.03)';
       const gs = 40 * z;
       if (gs > 10) {
         const ox = ((p.x % gs) + gs) % gs;
@@ -265,12 +275,27 @@ export function GraphView() {
         if (queryLower && !matchesFilter(a) && !matchesFilter(b)) continue;
         const isHover = hoverRef.current === e.from || hoverRef.current === e.to;
         const isActive = state.activeNoteId === e.from || state.activeNoteId === e.to;
+        const isSelectedEdge = selectedRef.current === e.from || selectedRef.current === e.to;
+
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const mx = (a.x + b.x) / 2;
+        const my = (a.y + b.y) / 2;
+        const bend = Math.min(26, Math.max(-26, (dx + dy) * 0.02));
+        const nx = -dy * 0.08;
+        const ny = dx * 0.08;
 
         ctx!.beginPath();
-        ctx!.strokeStyle = isHover ? 'rgba(70,140,255,0.85)' : isActive ? 'rgba(180,180,180,0.36)' : 'rgba(120,120,120,0.12)';
-        ctx!.lineWidth = isActive ? 1.1 : isHover ? 0.9 : 0.45;
+        ctx!.strokeStyle = isHover
+          ? `${theme.accentHover}cc`
+          : isSelectedEdge
+          ? `${theme.accent}88`
+          : isActive
+          ? 'rgba(220,228,241,0.34)'
+          : 'rgba(140,156,180,0.16)';
+        ctx!.lineWidth = isSelectedEdge ? 1.6 : isActive ? 1.2 : isHover ? 1 : 0.6;
         ctx!.moveTo(a.x, a.y);
-        ctx!.lineTo(b.x, b.y);
+        ctx!.quadraticCurveTo(mx + nx + bend, my + ny - bend, b.x, b.y);
         ctx!.stroke();
       }
 
@@ -285,16 +310,19 @@ export function GraphView() {
         const isHover = n.id === hoverRef.current;
         const isSelected = n.id === selectedRef.current;
         const dimmed = queryLower && !matchesFilter(n);
+        const groupSeed = [...n.group].reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+        const hue = groupSeed % 360;
+        const groupColor = `hsla(${hue}, 45%, 62%, 0.85)`;
 
         // Outer glow for active
         if (isActive) {
           ctx!.beginPath();
           ctx!.arc(n.x, n.y, r + 8, 0, Math.PI * 2);
-          ctx!.fillStyle = 'rgba(80,140,255,0.06)';
+          ctx!.fillStyle = `${theme.accent}22`;
           ctx!.fill();
           ctx!.beginPath();
           ctx!.arc(n.x, n.y, r + 4, 0, Math.PI * 2);
-          ctx!.fillStyle = 'rgba(120,170,255,0.1)';
+          ctx!.fillStyle = `${theme.accentHover}33`;
           ctx!.fill();
         }
 
@@ -306,16 +334,17 @@ export function GraphView() {
           ctx!.fillStyle = 'rgba(70,70,70,0.35)';
           ctx!.fill();
         } else if (isActive) {
-          ctx!.fillStyle = '#d9d9d9';
-          ctx!.strokeStyle = '#a0a0a0';
+          ctx!.fillStyle = theme.text;
+          ctx!.strokeStyle = theme.accentHover;
           ctx!.lineWidth = 1;
           ctx!.fill(); ctx!.stroke();
         } else if (n.conns > 0) {
-          const b = 88 + Math.min(n.conns, 12) * 8;
-          ctx!.fillStyle = `rgb(${b},${b},${b})`;
+          ctx!.fillStyle = groupColor;
+          ctx!.globalAlpha = 0.45 + Math.min(n.conns, 8) * 0.05;
           ctx!.fill();
+          ctx!.globalAlpha = 1;
         } else {
-          ctx!.fillStyle = '#1c1c1c';
+          ctx!.fillStyle = 'rgba(120,130,145,0.28)';
           ctx!.fill();
         }
 
@@ -323,14 +352,14 @@ export function GraphView() {
         if ((isHover || isSelected) && !isActive) {
           ctx!.beginPath();
           ctx!.arc(n.x, n.y, r + 5, 0, Math.PI * 2);
-          ctx!.strokeStyle = isHover ? 'rgba(70,140,255,0.8)' : 'rgba(220,220,220,0.45)';
+          ctx!.strokeStyle = isHover ? `${theme.accentHover}cc` : `${theme.textSecondary}88`;
           ctx!.lineWidth = 0.8;
           ctx!.stroke();
         }
 
         // Labels
         if (!dimmed && (showAllLabels || isHover || isActive || isSelected)) {
-          ctx!.fillStyle = isActive ? '#f0f0f0' : '#c0c0c0';
+          ctx!.fillStyle = isActive ? theme.text : theme.textSecondary;
           ctx!.font = `${isActive || isSelected ? 'bold 10' : '9'}px -apple-system, system-ui, sans-serif`;
           ctx!.textAlign = 'center';
           ctx!.fillText(n.title, n.x, n.y + r + 13);
@@ -441,25 +470,25 @@ export function GraphView() {
   const togglePhysics = () => { physicsRef.current = !physicsRef.current; };
 
   return (
-    <div className="fixed inset-0 animate-fade-in" style={{ zIndex: 100, background: '#050505' }}>
+    <div className="fixed inset-0 animate-fade-in" style={{ zIndex: 100, background: 'var(--bg-deep)' }}>
       <canvas ref={canvasRef}
         onMouseDown={handleDown} onMouseMove={handleMove} onMouseUp={handleUp}
         onClick={handleClick} onWheel={handleWheel}
         style={{ display: 'block' }} />
 
       {/* Header */}
-      <div className="flex items-center justify-between" style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '10px 16px', background: 'rgba(5,5,5,0.92)', borderBottom: '1px solid #111' }}>
+      <div className="flex items-center justify-between" style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '10px 16px', background: 'color-mix(in srgb, var(--bg-base) 92%, transparent)', borderBottom: '1px solid var(--border)' }}>
         <div className="flex items-center gap-3">
           <FlintLogo size={14} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: '#666' }}>Graph View</span>
-          <span style={{ fontSize: 10, color: '#333', background: '#0a0a0a', padding: '2px 8px', borderRadius: 4, border: '1px solid #151515' }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Graph View</span>
+          <span style={{ fontSize: 10, color: 'var(--text-dim)', background: 'var(--bg-surface)', padding: '2px 8px', borderRadius: 4, border: '1px solid var(--border)' }}>
             {graphStats.nodes} nodes · {graphStats.edges} links
           </span>
         </div>
         <button onClick={() => dispatch({ type: 'TOGGLE_GRAPH_VIEW' })}
-          style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', display: 'flex' }}
-          onMouseEnter={e => { e.currentTarget.style.color = '#999'; }}
-          onMouseLeave={e => { e.currentTarget.style.color = '#444'; }}>
+          style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', display: 'flex' }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-dim)'; }}>
           <X size={18} />
         </button>
       </div>

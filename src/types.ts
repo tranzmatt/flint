@@ -26,6 +26,14 @@ export interface Vault {
   folderPath?: string;
 }
 
+export interface VaultWorkspace {
+  notes: Note[];
+  folders: Folder[];
+  openTabs: string[];
+  activeNoteId: string | null;
+  hasFolderHandle: boolean;
+}
+
 export type ViewMode = 'edit' | 'split' | 'preview';
 
 export interface FlintSettings {
@@ -75,6 +83,7 @@ export interface AISettings {
 
 export interface AppState {
   vaults: Vault[];
+  vaultData: Record<string, VaultWorkspace>;
   activeVaultId: string | null;
   notes: Note[];
   folders: Folder[];

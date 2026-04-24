@@ -12,18 +12,31 @@ interface Settings {
   showLineNumbers: boolean;
   tabSize: number;
   wordWrap: boolean;
-  theme: 'graphite' | 'ocean' | 'forest' | 'sunset';
+  theme: 'dark' | 'light' | 'rose' | 'ocean' | 'forest' | 'amber';
 }
 
 const SETTINGS_KEY = 'flint-settings';
 const DEFAULT_SETTINGS: Settings = {
-  fontSize: 14, spellCheck: false, autoSave: true, showLineNumbers: false, tabSize: 2, wordWrap: true, theme: 'graphite',
+  fontSize: 14, spellCheck: false, autoSave: true, showLineNumbers: false, tabSize: 2, wordWrap: true, theme: 'dark',
 };
 
 function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<Settings> & { theme?: string };
+      const themeMap: Record<string, Settings['theme']> = {
+        graphite: 'dark',
+        sunset: 'amber',
+        ocean: 'ocean',
+        forest: 'forest',
+        dark: 'dark',
+        light: 'light',
+        rose: 'rose',
+        amber: 'amber',
+      };
+      return { ...DEFAULT_SETTINGS, ...parsed, theme: themeMap[parsed.theme || 'dark'] || 'dark' };
+    }
   } catch { /* ignore */ }
   return DEFAULT_SETTINGS;
 }
@@ -45,6 +58,7 @@ export function SettingsPanel() {
   const isLocalProvider = state.aiSettings.provider === 'local-gguf';
   const isApiProvider = isCredentialProvider;
   const isOpenAICompatible = state.aiSettings.provider === 'openai-compatible';
+  const localModelLabel = state.aiSettings.localModelPath.split(/[\\/]/).pop() || 'model.gguf';
 
   useEffect(() => { saveSettings(settings); }, [settings]);
 
@@ -278,31 +292,31 @@ export function SettingsPanel() {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={close}>
-      <div style={{ width: 560, maxHeight: '85vh', background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 10, overflow: 'hidden', boxShadow: '0 16px 48px rgba(0,0,0,0.6)' }}
+      <div style={{ width: 560, maxHeight: '85vh', background: '#171b21', border: '1px solid #303744', borderRadius: 12, overflow: 'hidden', boxShadow: '0 18px 48px rgba(0,0,0,0.42)' }}
         onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="flex items-center justify-between" style={{ padding: '14px 18px', borderBottom: '1px solid #1a1a1a' }}>
+        <div className="flex items-center justify-between" style={{ padding: '14px 18px', borderBottom: '1px solid #303744', background: 'linear-gradient(180deg, #1e232b, #171b21)' }}>
           <div className="flex items-center gap-2">
             <FlintLogo size={14} />
-            <span style={{ fontSize: 14, fontWeight: 600, color: '#aaa' }}>Settings</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#d5dbe5' }}>Settings</span>
           </div>
-          <button onClick={close} style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', display: 'flex' }}
-            onMouseEnter={e => { e.currentTarget.style.color = '#888'; }}
-            onMouseLeave={e => { e.currentTarget.style.color = '#444'; }}>
+          <button onClick={close} style={{ background: 'none', border: 'none', color: '#768193', cursor: 'pointer', display: 'flex' }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#d2d8e2'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#768193'; }}>
             <X size={16} />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex" style={{ borderBottom: '1px solid #1a1a1a' }}>
+        <div className="flex" style={{ borderBottom: '1px solid #303744', background: '#161a20' }}>
           {(['editor', 'ai', 'vault', 'about'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               style={{
                 flex: 1, padding: '10px', background: 'none', border: 'none', cursor: 'pointer',
                 fontSize: 12, fontWeight: 500, textTransform: 'capitalize',
-                color: tab === t ? '#999' : '#444',
-                borderBottom: tab === t ? '2px solid #666' : '2px solid transparent',
+                color: tab === t ? '#d5dbe5' : '#7a8597',
+                borderBottom: tab === t ? '2px solid #93a4c0' : '2px solid transparent',
                 transition: 'all 0.15s',
               }}>
               {t === 'ai' ? 'AI' : t}
@@ -311,7 +325,7 @@ export function SettingsPanel() {
         </div>
 
         {/* Content */}
-        <div style={{ padding: '18px', overflowY: 'auto', maxHeight: 'calc(85vh - 110px)' }}>
+        <div style={{ padding: '18px', overflowY: 'auto', maxHeight: 'calc(85vh - 110px)', background: 'linear-gradient(180deg, rgba(255,255,255,0.015), transparent 240px)' }}>
 
           {tab === 'editor' && (
             <div className="flex flex-col gap-5">
@@ -320,14 +334,16 @@ export function SettingsPanel() {
                   onChange={e => setSettings(s => ({ ...s, fontSize: parseInt(e.target.value) }))}
                   style={{ flex: 1, accentColor: '#666' }} />
               </SettingRow>
-              <SettingRow icon={<Type size={14} />} label="Theme color">
+              <SettingRow icon={<Type size={14} />} label="App theme">
                 <select value={settings.theme}
                   onChange={e => setSettings(s => ({ ...s, theme: e.target.value as Settings['theme'] }))}
                   style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }}>
-                  <option value="graphite">Graphite</option>
+                  <option value="dark">Dark</option>
+                  <option value="light">Light</option>
+                  <option value="rose">Rose</option>
                   <option value="ocean">Ocean</option>
                   <option value="forest">Forest</option>
-                  <option value="sunset">Sunset</option>
+                  <option value="amber">Amber</option>
                 </select>
               </SettingRow>
               <SettingRow icon={<Hash size={14} />} label="Tab size" value={`${settings.tabSize}`}>
@@ -369,7 +385,7 @@ export function SettingsPanel() {
                     </button>
                   </div>
                 </div>
-                <div style={{ fontSize: 11, color: '#444', lineHeight: 1.6 }}>
+                <div style={{ fontSize: 11, color: '#95a1b3', lineHeight: 1.6 }}>
                   {!agentUp
                     ? 'Python agent not running. Run: python3 ~/.flint/agent/agent.py'
                     : state.aiSettings.provider === 'ollama' && ollamaStatus === 'connected'
@@ -378,8 +394,8 @@ export function SettingsPanel() {
                     ? 'Agent running but Ollama not found. Start with: ollama serve'
                     : isLocalProvider
                     ? state.aiSettings.localModelPath
-                      ? 'Agent running. Local GGUF model path configured.'
-                      : 'Agent running. Set a local GGUF model path to use your downloaded model.'
+                      ? `Agent running. Flint will send prompts directly to the self-hosted GGUF runtime for ${localModelLabel}.`
+                      : 'Agent running. Set a local GGUF model path to use your downloaded model directly through the self-hosted agent.'
                     : state.aiSettings.provider === 'ollama'
                     ? 'Checking connection...'
                     : 'Agent running. Requests will use your selected API provider and key.'}
@@ -391,7 +407,7 @@ export function SettingsPanel() {
                   onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { provider: e.target.value as 'ollama' | 'openai' | 'gemini' | 'openai-compatible' | 'local-gguf' } })}
                   style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }}>
                   <option value="ollama">Ollama (local)</option>
-                  <option value="local-gguf">Local GGUF file (Hugging Face/local)</option>
+                  <option value="local-gguf">Self-hosted GGUF (local file)</option>
                   <option value="openai">OpenAI</option>
                   <option value="gemini">Google Gemini</option>
                   <option value="openai-compatible">Other OpenAI-compatible API</option>
@@ -459,7 +475,7 @@ export function SettingsPanel() {
                   <div className="flex items-center gap-2" style={{ flex: 1 }}>
                     <input type="text" value={state.aiSettings.model}
                       onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { model: e.target.value } })}
-                      placeholder={state.aiSettings.provider === 'openai' ? 'e.g. gpt-4o-mini' : state.aiSettings.provider === 'gemini' ? 'e.g. gemini-1.5-flash' : state.aiSettings.provider === 'openai-compatible' ? 'Provider model id' : 'e.g. llama3.2, mistral, codellama, phi3'}
+                      placeholder={state.aiSettings.provider === 'openai' ? 'e.g. gpt-4o-mini' : state.aiSettings.provider === 'gemini' ? 'e.g. gemini-1.5-flash' : state.aiSettings.provider === 'openai-compatible' ? 'Provider model id' : state.aiSettings.provider === 'local-gguf' ? 'Optional alias for the GGUF model' : 'e.g. llama3.2, mistral, codellama, phi3'}
                       style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }} />
                   </div>
                 )}

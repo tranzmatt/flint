@@ -123,14 +123,14 @@ function AppContent() {
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#0a0a0a' }}>
+    <div className="h-screen flex flex-col overflow-hidden" style={{ background: 'var(--bg-base)', color: 'var(--text)' }}>
       <div className="flex-1 flex min-h-0">
 
         {/* Ribbon */}
         <div className="flex flex-col items-center py-2 gap-0.5 shrink-0"
-          style={{ width: 48, background: '#060606', borderRight: '1px solid #1a1a1a' }}>
+          style={{ width: 50, background: 'var(--bg-surface)', borderRight: '1px solid var(--border)', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.03)' }}>
 
-          <button style={{ width: 36, height: 36, borderRadius: 8, background: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8, border: '1px solid #1a1a1a', cursor: 'pointer' }}>
+          <button style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8, border: '1px solid var(--border-light)', cursor: 'pointer' }}>
             <FlintLogo size={18} />
           </button>
 
@@ -156,24 +156,24 @@ function AppContent() {
         {(() => {
           if (!activeNoteId || !activeNote) {
             return (
-              <div className="flex-1 flex items-center justify-center" style={{ background: '#0a0a0a' }}>
+              <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--bg-base)' }}>
                 <div className="text-center animate-fade-in">
-                  <div style={{ width: 56, height: 56, borderRadius: 14, background: '#0f0f0f', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', border: '1px solid #1a1a1a' }}>
+                  <div style={{ width: 56, height: 56, borderRadius: 14, background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', border: '1px solid var(--border-light)' }}>
                     <FlintLogo size={28} />
                   </div>
-                  <h2 style={{ fontSize: 16, fontWeight: 600, color: '#888', marginBottom: 8 }}>No note selected</h2>
-                  <p style={{ color: '#333', fontSize: 13, marginBottom: 20, maxWidth: 260, lineHeight: 1.5, margin: '0 auto 20px' }}>
+                  <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>No note selected</h2>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 20, maxWidth: 260, lineHeight: 1.5, margin: '0 auto 20px' }}>
                     Create a new note or select one from the sidebar.
                   </p>
                   <div className="flex items-center gap-2 justify-center">
                     <button onClick={() => createNote()}
                       className="flex items-center gap-2"
-                      style={{ padding: '7px 14px', background: '#888', color: '#000', border: 'none', cursor: 'pointer', borderRadius: 6, fontSize: 12, fontWeight: 600 }}>
+                      style={{ padding: '7px 14px', background: 'var(--accent)', color: 'var(--bg-deep)', border: 'none', cursor: 'pointer', borderRadius: 6, fontSize: 12, fontWeight: 600 }}>
                       <Plus size={12} /> New Note
                     </button>
                     <button onClick={() => dispatch({ type: 'TOGGLE_GRAPH_VIEW' })}
                       className="flex items-center gap-2"
-                      style={{ padding: '7px 14px', background: '#141414', color: '#666', border: '1px solid #1a1a1a', cursor: 'pointer', borderRadius: 6, fontSize: 12 }}>
+                      style={{ padding: '7px 14px', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border-light)', cursor: 'pointer', borderRadius: 6, fontSize: 12 }}>
                       <Waypoints size={12} /> Graph
                     </button>
                   </div>
@@ -183,11 +183,11 @@ function AppContent() {
           }
 
           return (
-            <div className="flex-1 flex flex-col min-w-0" style={{ background: '#0a0a0a' }}>
+            <div className="flex-1 flex flex-col min-w-0" style={{ background: 'var(--bg-base)' }}>
 
               {/* Note title bar */}
-              <div className="flex items-center px-4 shrink-0" style={{ height: 36, borderBottom: '1px solid #1a1a1a', background: '#0a0a0a' }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: '#999', flex: 1 }}>{activeNote.title}</span>
+              <div className="flex items-center px-4 shrink-0" style={{ height: 38, borderBottom: '1px solid var(--border)', background: 'linear-gradient(180deg, var(--bg-elevated), var(--bg-base))' }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', flex: 1 }}>{activeNote.title}</span>
                 <div className="flex items-center gap-1">
                   {([
                     { mode: 'edit' as const, icon: <PenLine size={13} />, label: 'Edit' },
@@ -197,9 +197,9 @@ function AppContent() {
                     <button key={v.mode} title={v.label}
                       className="flex items-center gap-1"
                       style={{
-                        padding: '3px 7px', borderRadius: 4, border: 'none', cursor: 'pointer', fontSize: 11,
-                        background: viewMode === v.mode ? '#141414' : 'transparent',
-                        color: viewMode === v.mode ? '#999' : '#444',
+                        padding: '4px 8px', borderRadius: 6, border: '1px solid transparent', cursor: 'pointer', fontSize: 11,
+                        background: viewMode === v.mode ? 'var(--bg-elevated)' : 'transparent',
+                        color: viewMode === v.mode ? 'var(--text)' : 'var(--text-dim)',
                         transition: 'all 0.1s',
                       }}
                       onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: v.mode })}>
@@ -210,7 +210,7 @@ function AppContent() {
               </div>
 
               {/* Formatting toolbar — buttons now work! */}
-              <div className="flex items-center gap-0.5 px-4 shrink-0" style={{ height: 32, borderBottom: '1px solid #1a1a1a', background: '#0a0a0a' }}>
+              <div className="flex items-center gap-0.5 px-4 shrink-0" style={{ height: 34, borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
                 {[
                   { icon: <Bold size={13} />, title: 'Bold', fmt: 'bold' },
                   { icon: <Italic size={13} />, title: 'Italic', fmt: 'italic' },
@@ -224,9 +224,9 @@ function AppContent() {
                 ].map((btn) => (
                   <button key={btn.fmt} title={btn.title}
                     onClick={() => format(btn.fmt)}
-                    style={{ padding: '3px 5px', background: 'none', border: 'none', color: '#333', cursor: 'pointer', borderRadius: 3, display: 'flex', alignItems: 'center', transition: 'all 0.1s' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#141414'; e.currentTarget.style.color = '#888'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#333'; }}>
+                    style={{ padding: '4px 6px', background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', borderRadius: 5, display: 'flex', alignItems: 'center', transition: 'all 0.1s' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-dim)'; }}>
                     {btn.icon}
                   </button>
                 ))}
@@ -238,12 +238,12 @@ function AppContent() {
               {/* Content */}
               <div className="flex-1 min-h-0 flex">
                 {(viewMode === 'edit' || viewMode === 'split') && (
-                  <div className={viewMode === 'split' ? 'w-1/2' : 'flex-1'} style={{ borderRight: viewMode === 'split' ? '1px solid #1a1a1a' : 'none', overflow: 'auto' }}>
+                  <div className={viewMode === 'split' ? 'w-1/2' : 'flex-1'} style={{ borderRight: viewMode === 'split' ? '1px solid var(--border)' : 'none', overflow: 'auto', background: 'var(--bg-base)' }}>
                     <Editor noteId={activeNoteId} />
                   </div>
                 )}
                 {(viewMode === 'preview' || viewMode === 'split') && (
-                  <div className={viewMode === 'split' ? 'w-1/2' : 'flex-1'} style={{ overflow: 'auto', background: '#0a0a0a' }}>
+                  <div className={viewMode === 'split' ? 'w-1/2' : 'flex-1'} style={{ overflow: 'auto', background: 'var(--bg-base)' }}>
                     <Preview noteId={activeNoteId} />
                   </div>
                 )}
@@ -274,13 +274,13 @@ function RibbonBtn({ icon, onClick, active, title }: { icon: React.ReactNode; on
       className="flex items-center justify-center"
       style={{
         width: 34, height: 34, borderRadius: 6, border: 'none',
-        background: active ? '#141414' : 'transparent',
-        color: active ? '#999' : '#333',
+        background: active ? 'var(--bg-elevated)' : 'transparent',
+        color: active ? 'var(--text)' : 'var(--text-dim)',
         cursor: 'pointer', transition: 'all 0.1s',
       }}
       onClick={onClick}
-      onMouseEnter={e => { if (!active) { e.currentTarget.style.background = '#0f0f0f'; e.currentTarget.style.color = '#777'; } }}
-      onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#333'; } }}>
+      onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text)'; } }}
+      onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-dim)'; } }}>
       {icon}
     </button>
   );

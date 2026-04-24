@@ -8,7 +8,11 @@ try {
   if (raw) {
     const parsed = JSON.parse(raw);
     if (parsed?.theme) {
-      document.body.dataset.theme = parsed.theme;
+      const themeMap: Record<string, string> = {
+        graphite: 'dark',
+        sunset: 'amber',
+      };
+      document.body.dataset.theme = themeMap[parsed.theme] || parsed.theme;
     }
   }
 } catch {

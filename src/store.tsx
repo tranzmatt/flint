@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, useEffect, useRef, useCallback, type ReactNode } from 'react';
-import type { Note, Folder, Vault, AppState, ChatMessage, AISettings } from './types';
+import type { Note, Folder, Vault, AppState, ChatMessage, AISettings, VaultWorkspace } from './types';
 
 const STORAGE_KEY = 'flint-data';
 const SUPPORTED_AI_PROVIDERS = ['ollama', 'openai', 'gemini', 'openai-compatible', 'local-gguf'] as const;
@@ -35,6 +35,67 @@ function normalizeAISettings(raw: unknown): AISettings {
   return merged;
 }
 
+function buildWorkspace(notes: Note[], folders: Folder[], openTabs?: string[], activeNoteId?: string | null, hasFolderHandle = false): VaultWorkspace {
+  const firstNoteId = notes[0]?.id || null;
+  const normalizedTabs = (openTabs || []).filter(id => notes.some(note => note.id === id));
+  const fallbackTabs = normalizedTabs.length ? normalizedTabs : firstNoteId ? [firstNoteId] : [];
+  const fallbackActive = activeNoteId && notes.some(note => note.id === activeNoteId)
+    ? activeNoteId
+    : fallbackTabs[0] || null;
+
+  return {
+    notes,
+    folders,
+    openTabs: fallbackTabs,
+    activeNoteId: fallbackActive,
+    hasFolderHandle,
+  };
+}
+
+function syncActiveVaultState(state: AppState): AppState {
+  if (!state.activeVaultId) {
+    return {
+      ...state,
+      notes: [],
+      folders: [],
+      openTabs: [],
+      activeNoteId: null,
+      hasFolderHandle: false,
+    };
+  }
+
+  const workspace = state.vaultData[state.activeVaultId] || buildWorkspace([], []);
+  return {
+    ...state,
+    notes: workspace.notes,
+    folders: workspace.folders,
+    openTabs: workspace.openTabs,
+    activeNoteId: workspace.activeNoteId,
+    hasFolderHandle: workspace.hasFolderHandle,
+  };
+}
+
+function updateCurrentWorkspace(state: AppState, updater: (workspace: VaultWorkspace) => VaultWorkspace): AppState {
+  if (!state.activeVaultId) return state;
+  const current = state.vaultData[state.activeVaultId] || buildWorkspace([], []);
+  const updated = updater(current);
+  const nextWorkspace = buildWorkspace(
+    updated.notes,
+    updated.folders,
+    updated.openTabs,
+    updated.activeNoteId,
+    updated.hasFolderHandle,
+  );
+  const nextState = {
+    ...state,
+    vaultData: {
+      ...state.vaultData,
+      [state.activeVaultId]: nextWorkspace,
+    },
+  };
+  return syncActiveVaultState(nextState);
+}
+
 function saveState(state: AppState) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { console.warn('Save failed:', e); }
 }
@@ -45,13 +106,50 @@ function loadState(): AppState | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<AppState>;
     if (parsed && parsed.vaults) {
-      // hasFolderHandle is runtime state — always reset on load
-      const normalized = {
-        ...parsed,
-        hasFolderHandle: false,
+      const notes = parsed.notes || [];
+      const folders = parsed.folders || [];
+      const openTabs = parsed.openTabs || [];
+      const activeVaultId = parsed.activeVaultId || parsed.vaults[0]?.id || null;
+      const legacyWorkspace = buildWorkspace(notes, folders, openTabs, parsed.activeNoteId || null, false);
+      const savedVaultData = parsed.vaultData || {};
+      const vaultData = Object.fromEntries(
+        parsed.vaults.map(vault => {
+          const workspace = savedVaultData[vault.id];
+          return [vault.id, buildWorkspace(
+            workspace?.notes || (vault.id === activeVaultId ? notes : []),
+            workspace?.folders || (vault.id === activeVaultId ? folders : []),
+            workspace?.openTabs || (vault.id === activeVaultId ? openTabs : []),
+            workspace?.activeNoteId || (vault.id === activeVaultId ? parsed.activeNoteId || null : null),
+            false,
+          )];
+        })
+      ) as Record<string, VaultWorkspace>;
+
+      if (activeVaultId && !vaultData[activeVaultId]) {
+        vaultData[activeVaultId] = legacyWorkspace;
+      }
+
+      const baseState: AppState = {
+        vaults: parsed.vaults,
+        vaultData,
+        activeVaultId,
+        notes: [],
+        folders: [],
+        openTabs: [],
+        activeNoteId: null,
+        viewMode: parsed.viewMode || 'edit',
+        sidebarOpen: parsed.sidebarOpen ?? true,
+        rightPanelOpen: parsed.rightPanelOpen ?? false,
+        showGraphView: false,
+        showSearch: false,
+        showCommandPalette: false,
+        settingsOpen: false,
+        showAIChat: parsed.showAIChat ?? false,
+        aiMessages: parsed.aiMessages || [],
         aiSettings: normalizeAISettings(parsed.aiSettings),
-      } as AppState;
-      return normalized;
+        hasFolderHandle: false,
+      };
+      return syncActiveVaultState(baseState);
     }
   } catch { /* ignore */ }
   return null;
@@ -283,12 +381,22 @@ const DEFAULT_VAULT: Vault = {
 function getInitialState(): AppState {
   const saved = loadState();
   if (saved && saved.vaults && saved.vaults.length > 0 && saved.activeVaultId) return saved;
+  const defaultWorkspace = buildWorkspace(DEMO_NOTES, DEMO_FOLDERS, ['n1'], 'n1', false);
   return {
-    vaults: [DEFAULT_VAULT], activeVaultId: 'v1',
-    notes: DEMO_NOTES, folders: DEMO_FOLDERS,
-    openTabs: ['n1'], activeNoteId: 'n1',
-    viewMode: 'edit', sidebarOpen: true, rightPanelOpen: false,
-    showGraphView: false, showSearch: false, showCommandPalette: false, settingsOpen: false,
+    vaults: [DEFAULT_VAULT],
+    vaultData: { v1: defaultWorkspace },
+    activeVaultId: 'v1',
+    notes: defaultWorkspace.notes,
+    folders: defaultWorkspace.folders,
+    openTabs: defaultWorkspace.openTabs,
+    activeNoteId: defaultWorkspace.activeNoteId,
+    viewMode: 'edit',
+    sidebarOpen: true,
+    rightPanelOpen: false,
+    showGraphView: false,
+    showSearch: false,
+    showCommandPalette: false,
+    settingsOpen: false,
     showAIChat: false,
     aiMessages: [],
     aiSettings: DEFAULT_AI_SETTINGS,
@@ -330,51 +438,65 @@ type Action =
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
-    case 'SET_STATE': return action.payload;
+    case 'SET_STATE': return syncActiveVaultState(action.payload);
     case 'CREATE_VAULT': {
       const vault: Vault = { id: action.payload.id, name: action.payload.name, color: action.payload.color, createdAt: Date.now(), lastOpened: Date.now() };
-      return { ...state, vaults: [...state.vaults, vault] };
+      return {
+        ...state,
+        vaults: [...state.vaults, vault],
+        vaultData: {
+          ...state.vaultData,
+          [vault.id]: buildWorkspace([], []),
+        },
+      };
     }
     case 'OPEN_VAULT': {
       const vault = state.vaults.find(v => v.id === action.payload);
       if (!vault) return state;
-      const updated = { ...state, activeVaultId: vault.id, showGraphView: false, showSearch: false, showCommandPalette: false };
-      if (!updated.openTabs.length && updated.notes.length) {
-        updated.openTabs = [updated.notes[0].id];
-        updated.activeNoteId = updated.notes[0].id;
-      }
-      return updated;
+      return syncActiveVaultState({ ...state, activeVaultId: vault.id, showGraphView: false, showSearch: false, showCommandPalette: false });
     }
-    case 'CLOSE_VAULT': return { ...state, activeVaultId: null, showGraphView: false, showSearch: false, showCommandPalette: false };
+    case 'CLOSE_VAULT': return syncActiveVaultState({ ...state, activeVaultId: null, showGraphView: false, showSearch: false, showCommandPalette: false });
     case 'DELETE_VAULT': {
       const vaults = state.vaults.filter(v => v.id !== action.payload);
-      if (vaults.length === 0) return { ...state, vaults: [], activeVaultId: null };
-      return { ...state, vaults, activeVaultId: state.activeVaultId === action.payload ? vaults[0].id : state.activeVaultId };
+      const vaultData = { ...state.vaultData };
+      delete vaultData[action.payload];
+      if (vaults.length === 0) return syncActiveVaultState({ ...state, vaults: [], vaultData: {}, activeVaultId: null });
+      return syncActiveVaultState({ ...state, vaults, vaultData, activeVaultId: state.activeVaultId === action.payload ? vaults[0].id : state.activeVaultId });
     }
     case 'OPEN_TAB': {
-      const tabs = state.openTabs.includes(action.payload) ? state.openTabs : [...state.openTabs, action.payload];
-      return { ...state, openTabs: tabs, activeNoteId: action.payload, showGraphView: false };
+      return updateCurrentWorkspace(
+        { ...state, showGraphView: false },
+        workspace => ({
+          ...workspace,
+          openTabs: workspace.openTabs.includes(action.payload) ? workspace.openTabs : [...workspace.openTabs, action.payload],
+          activeNoteId: action.payload,
+        })
+      );
     }
     case 'CLOSE_TAB': {
-      const idx = state.openTabs.indexOf(action.payload);
-      const tabs = state.openTabs.filter(t => t !== action.payload);
-      let activeId = state.activeNoteId;
-      if (activeId === action.payload) activeId = tabs.length > 0 ? tabs[Math.min(idx, tabs.length - 1)] : null;
-      return { ...state, openTabs: tabs, activeNoteId: activeId };
+      return updateCurrentWorkspace(state, workspace => {
+        const idx = workspace.openTabs.indexOf(action.payload);
+        const tabs = workspace.openTabs.filter(t => t !== action.payload);
+        let activeId = workspace.activeNoteId;
+        if (activeId === action.payload) activeId = tabs.length > 0 ? tabs[Math.min(idx, tabs.length - 1)] : null;
+        return { ...workspace, openTabs: tabs, activeNoteId: activeId };
+      });
     }
-    case 'SET_ACTIVE_TAB': return { ...state, activeNoteId: action.payload };
-    case 'UPDATE_NOTE': return { ...state, notes: state.notes.map(n => n.id === action.payload.id ? { ...n, content: action.payload.content, updatedAt: Date.now() } : n) };
-    case 'RENAME_NOTE': return { ...state, notes: state.notes.map(n => n.id === action.payload.id ? { ...n, title: action.payload.title, updatedAt: Date.now() } : n) };
-    case 'ADD_NOTE': return { ...state, notes: [...state.notes, action.payload], openTabs: [...state.openTabs, action.payload.id], activeNoteId: action.payload.id, showGraphView: false };
+    case 'SET_ACTIVE_TAB': return updateCurrentWorkspace(state, workspace => ({ ...workspace, activeNoteId: action.payload }));
+    case 'UPDATE_NOTE': return updateCurrentWorkspace(state, workspace => ({ ...workspace, notes: workspace.notes.map(n => n.id === action.payload.id ? { ...n, content: action.payload.content, updatedAt: Date.now() } : n) }));
+    case 'RENAME_NOTE': return updateCurrentWorkspace(state, workspace => ({ ...workspace, notes: workspace.notes.map(n => n.id === action.payload.id ? { ...n, title: action.payload.title, updatedAt: Date.now() } : n) }));
+    case 'ADD_NOTE': return updateCurrentWorkspace({ ...state, showGraphView: false }, workspace => ({ ...workspace, notes: [...workspace.notes, action.payload], openTabs: [...workspace.openTabs, action.payload.id], activeNoteId: action.payload.id }));
     case 'DELETE_NOTE': {
-      const tabs = state.openTabs.filter(t => t !== action.payload);
-      let activeId = state.activeNoteId === action.payload ? (tabs[0] || null) : state.activeNoteId;
-      return { ...state, notes: state.notes.filter(n => n.id !== action.payload), openTabs: tabs, activeNoteId: activeId };
+      return updateCurrentWorkspace(state, workspace => {
+        const tabs = workspace.openTabs.filter(t => t !== action.payload);
+        const activeId = workspace.activeNoteId === action.payload ? (tabs[0] || null) : workspace.activeNoteId;
+        return { ...workspace, notes: workspace.notes.filter(n => n.id !== action.payload), openTabs: tabs, activeNoteId: activeId };
+      });
     }
-    case 'PIN_NOTE': return { ...state, notes: state.notes.map(n => n.id === action.payload ? { ...n, pinned: !n.pinned } : n) };
-    case 'ADD_FOLDER': return { ...state, folders: [...state.folders, action.payload] };
-    case 'DELETE_FOLDER': return { ...state, folders: state.folders.filter(f => f.id !== action.payload), notes: state.notes.map(n => n.folderId === action.payload ? { ...n, folderId: null } : n) };
-    case 'TOGGLE_FOLDER': return { ...state, folders: state.folders.map(f => f.id === action.payload ? { ...f, collapsed: !f.collapsed } : f) };
+    case 'PIN_NOTE': return updateCurrentWorkspace(state, workspace => ({ ...workspace, notes: workspace.notes.map(n => n.id === action.payload ? { ...n, pinned: !n.pinned } : n) }));
+    case 'ADD_FOLDER': return updateCurrentWorkspace(state, workspace => ({ ...workspace, folders: [...workspace.folders, action.payload] }));
+    case 'DELETE_FOLDER': return updateCurrentWorkspace(state, workspace => ({ ...workspace, folders: workspace.folders.filter(f => f.id !== action.payload), notes: workspace.notes.map(n => n.folderId === action.payload ? { ...n, folderId: null } : n) }));
+    case 'TOGGLE_FOLDER': return updateCurrentWorkspace(state, workspace => ({ ...workspace, folders: workspace.folders.map(f => f.id === action.payload ? { ...f, collapsed: !f.collapsed } : f) }));
     case 'SET_VIEW_MODE': return { ...state, viewMode: action.payload };
     case 'TOGGLE_SIDEBAR': return { ...state, sidebarOpen: !state.sidebarOpen };
     case 'TOGGLE_RIGHT_PANEL': return { ...state, rightPanelOpen: !state.rightPanelOpen };
@@ -386,11 +508,18 @@ function reducer(state: AppState, action: Action): AppState {
     case 'ADD_AI_MESSAGE': return { ...state, aiMessages: [...state.aiMessages, action.payload] };
     case 'CLEAR_AI_MESSAGES': return { ...state, aiMessages: [] };
     case 'UPDATE_AI_SETTINGS': return { ...state, aiSettings: { ...state.aiSettings, ...action.payload } };
-    case 'IMPORT_NOTES': return { ...state, notes: action.payload.notes, folders: action.payload.folders, openTabs: action.payload.notes.length > 0 ? [action.payload.notes[0].id] : [], activeNoteId: action.payload.notes.length > 0 ? action.payload.notes[0].id : null };
-    case 'SET_FOLDER_HANDLE': return { ...state, hasFolderHandle: action.payload };
+    case 'IMPORT_NOTES': return updateCurrentWorkspace(state, workspace => ({ ...workspace, ...buildWorkspace(action.payload.notes, action.payload.folders, [action.payload.notes[0]?.id].filter(Boolean) as string[], action.payload.notes[0]?.id || null, workspace.hasFolderHandle) }));
+    case 'SET_FOLDER_HANDLE': return updateCurrentWorkspace(state, workspace => ({ ...workspace, hasFolderHandle: action.payload }));
     case 'CREATE_FOLDER_VAULT': {
       const vault: Vault = { id: action.payload.id, name: action.payload.name, color: action.payload.color, createdAt: Date.now(), lastOpened: Date.now(), isFolderVault: true, folderPath: action.payload.folderPath };
-      return { ...state, vaults: [...state.vaults, vault] };
+      return {
+        ...state,
+        vaults: [...state.vaults, vault],
+        vaultData: {
+          ...state.vaultData,
+          [vault.id]: buildWorkspace([], [], [], null, true),
+        },
+      };
     }
     default: return state;
   }

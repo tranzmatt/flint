@@ -1,48 +1,151 @@
 @import "tailwindcss";
 
 :root {
-  --bg-deep: #050505;
-  --bg-base: #0a0a0a;
-  --bg-surface: #0f0f0f;
-  --bg-elevated: #141414;
-  --bg-hover: #1a1a1a;
-  --bg-active: #1e1e1e;
-  --border: #1a1a1a;
-  --border-light: #222;
-  --border-focus: #333;
-  --text: #e0e0e0;
-  --text-secondary: #999;
-  --text-muted: #666;
-  --text-dim: #444;
-  --accent: #aaa;
-  --accent-hover: #bbb;
-  --accent-dim: #777;
-  --app-theme-filter: none;
+  --bg-deep: #121418;
+  --bg-base: #16181d;
+  --bg-surface: #1b1f26;
+  --bg-elevated: #21262f;
+  --bg-hover: #272d38;
+  --bg-active: #2f3642;
+  --border: #303744;
+  --border-light: #3a4250;
+  --border-focus: #4c5668;
+  --text: #d7dce5;
+  --text-secondary: #a3acba;
+  --text-muted: #7d8696;
+  --text-dim: #626b79;
+  --accent: #8fa1bf;
+  --accent-hover: #b5c0d5;
+  --accent-dim: #64728b;
+  --editor-rule: rgba(185, 196, 215, 0.075);
+  --editor-guide: rgba(164, 176, 198, 0.18);
+  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.35);
 }
 
-body[data-theme='graphite'] {
-  --app-theme-filter: none;
+body[data-theme='dark'] {
+  --bg-deep: #121418;
+  --bg-base: #16181d;
+  --bg-surface: #1b1f26;
+  --bg-elevated: #21262f;
+  --bg-hover: #272d38;
+  --bg-active: #2f3642;
+  --border: #303744;
+  --border-light: #3a4250;
+  --border-focus: #4c5668;
+  --text: #d7dce5;
+  --text-secondary: #a3acba;
+  --text-muted: #7d8696;
+  --text-dim: #626b79;
+  --accent: #8fa1bf;
+  --accent-hover: #b5c0d5;
+  --accent-dim: #64728b;
+  --editor-rule: rgba(185, 196, 215, 0.075);
+  --editor-guide: rgba(164, 176, 198, 0.18);
+}
+
+body[data-theme='light'] {
+  --bg-deep: #eef2f8;
+  --bg-base: #f5f7fb;
+  --bg-surface: #ffffff;
+  --bg-elevated: #edf1f8;
+  --bg-hover: #e3e9f3;
+  --bg-active: #d7e0ee;
+  --border: #c7d1e0;
+  --border-light: #b8c5d8;
+  --border-focus: #8ba0c0;
+  --text: #1f2937;
+  --text-secondary: #425066;
+  --text-muted: #66758f;
+  --text-dim: #8090a6;
+  --accent: #5f7fb4;
+  --accent-hover: #4f6ea3;
+  --accent-dim: #7e96be;
+  --editor-rule: rgba(77, 97, 132, 0.08);
+  --editor-guide: rgba(95, 127, 180, 0.22);
+}
+
+body[data-theme='rose'] {
+  --bg-deep: #1f1820;
+  --bg-base: #241c26;
+  --bg-surface: #2e2431;
+  --bg-elevated: #382b3c;
+  --bg-hover: #433248;
+  --bg-active: #514058;
+  --border: #5a435d;
+  --border-light: #6c5170;
+  --border-focus: #9d6fa0;
+  --text: #f0ddea;
+  --text-secondary: #d7afcf;
+  --text-muted: #b78ead;
+  --text-dim: #8f6f88;
+  --accent: #d78ebf;
+  --accent-hover: #f0b1db;
+  --accent-dim: #a96b95;
+  --editor-rule: rgba(230, 169, 212, 0.08);
+  --editor-guide: rgba(215, 142, 191, 0.24);
 }
 
 body[data-theme='ocean'] {
-  --accent: #8fb7d1;
-  --accent-hover: #b5d2e4;
-  --accent-dim: #65859a;
-  --app-theme-filter: hue-rotate(26deg) saturate(1.1);
+  --bg-deep: #101822;
+  --bg-base: #12202d;
+  --bg-surface: #172a39;
+  --bg-elevated: #1c3447;
+  --bg-hover: #214159;
+  --bg-active: #28506f;
+  --border: #355670;
+  --border-light: #446984;
+  --border-focus: #5c88aa;
+  --text: #d8e8f4;
+  --text-secondary: #a9c4d8;
+  --text-muted: #86a7c0;
+  --text-dim: #6887a2;
+  --accent: #7db3d8;
+  --accent-hover: #a8d2ec;
+  --accent-dim: #5f89a9;
+  --editor-rule: rgba(168, 210, 236, 0.08);
+  --editor-guide: rgba(125, 179, 216, 0.24);
 }
 
 body[data-theme='forest'] {
-  --accent: #9ac18d;
-  --accent-hover: #bddaad;
-  --accent-dim: #6d8f63;
-  --app-theme-filter: hue-rotate(-34deg) saturate(1.08);
+  --bg-deep: #131914;
+  --bg-base: #182019;
+  --bg-surface: #1f2a21;
+  --bg-elevated: #273228;
+  --bg-hover: #314035;
+  --bg-active: #3e5143;
+  --border: #435447;
+  --border-light: #4f6555;
+  --border-focus: #7ca386;
+  --text: #d8e8db;
+  --text-secondary: #abc5b0;
+  --text-muted: #86a08a;
+  --text-dim: #677d6a;
+  --accent: #8bbf91;
+  --accent-hover: #b2d7b5;
+  --accent-dim: #6e9673;
+  --editor-rule: rgba(178, 215, 181, 0.08);
+  --editor-guide: rgba(139, 191, 145, 0.24);
 }
 
-body[data-theme='sunset'] {
-  --accent: #d2a27f;
-  --accent-hover: #e2b999;
-  --accent-dim: #9f775b;
-  --app-theme-filter: hue-rotate(58deg) saturate(1.14);
+body[data-theme='amber'] {
+  --bg-deep: #1d160f;
+  --bg-base: #241c14;
+  --bg-surface: #2d241b;
+  --bg-elevated: #382c21;
+  --bg-hover: #473728;
+  --bg-active: #59442f;
+  --border: #6a5138;
+  --border-light: #7b6245;
+  --border-focus: #b38753;
+  --text: #f0e1cf;
+  --text-secondary: #d7be9f;
+  --text-muted: #b89a77;
+  --text-dim: #8f765a;
+  --accent: #d2a06a;
+  --accent-hover: #ebbc86;
+  --accent-dim: #9f7a52;
+  --editor-rule: rgba(235, 188, 134, 0.08);
+  --editor-guide: rgba(210, 160, 106, 0.24);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -51,15 +154,17 @@ html, body, #root {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
   background: var(--bg-base);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
 
 #root {
-  filter: var(--app-theme-filter);
-  transition: filter 0.2s ease;
+  background:
+    radial-gradient(circle at top left, rgba(143, 161, 191, 0.08), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(110, 124, 149, 0.08), transparent 24%),
+    var(--bg-base);
 }
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -80,17 +185,28 @@ html, body, #root {
 
 .flint-editor {
   width: 100%; height: 100%;
-  background: var(--bg-base); color: var(--text);
+  background:
+    linear-gradient(90deg, transparent 70px, var(--editor-guide) 70px, var(--editor-guide) 71px, transparent 71px),
+    repeating-linear-gradient(to bottom, transparent 0, transparent calc(1.75em - 1px), var(--editor-rule) calc(1.75em - 1px), var(--editor-rule) 1.75em),
+    linear-gradient(180deg, rgba(255,255,255,0.015), rgba(0,0,0,0.03)),
+    var(--bg-base);
+  color: var(--text);
   border: none; outline: none; resize: none;
-  padding: 32px 48px;
+  padding: 32px 48px 32px 88px;
   font-size: 15px; line-height: 1.75;
   font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Cascadia Code', monospace;
-  tab-size: 2; caret-color: #888;
+  tab-size: 2; caret-color: var(--accent-hover);
 }
 .flint-editor::placeholder { color: var(--text-dim); }
 .flint-editor::selection { background: rgba(255,255,255,0.08); }
 
-.flint-preview { padding: 32px 48px; font-size: 15px; line-height: 1.8; color: var(--text); }
+.flint-preview {
+  padding: 32px 48px;
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(255,255,255,0.015), transparent 240px);
+}
 .flint-preview h1 { font-size: 2em; font-weight: 700; margin: 0.8em 0 0.4em; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
 .flint-preview h2 { font-size: 1.5em; font-weight: 600; margin: 0.8em 0 0.4em; color: var(--text); }
 .flint-preview h3 { font-size: 1.25em; font-weight: 600; margin: 0.6em 0 0.3em; color: var(--text-secondary); }

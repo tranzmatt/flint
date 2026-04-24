@@ -22,7 +22,7 @@ export function AIChat() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
 
-  const { aiMessages, aiSettings, notes, activeNoteId } = state;
+  const { aiMessages, aiSettings, notes, activeNoteId, openTabs } = state;
 
   // Calculate memory stats
   useEffect(() => {
@@ -99,15 +99,21 @@ export function AIChat() {
 
   const applyAIActions = (actions: AIAction[]) => {
     const summaries: string[] = [];
+    const editableIds = new Set(openTabs);
     actions.forEach(action => {
+      const noteId = resolveTargetNoteId(action);
+      const targetLabel = noteId ? notes.find(note => note.id === noteId)?.title || 'note' : 'note';
+      const requiresOpenTarget = action.type !== 'create_note';
+      if (requiresOpenTarget && (!noteId || !editableIds.has(noteId))) {
+        summaries.push(`Blocked ${action.type.replace('_', ' ')} for "${targetLabel}" because only open notes are editable`);
+        return;
+      }
       if (action.type === 'rename_note') {
-        const noteId = resolveTargetNoteId(action);
         if (!noteId || !action.title) return;
         dispatch({ type: 'RENAME_NOTE', payload: { id: noteId, title: action.title } });
         summaries.push(`Renamed note to "${action.title}"`);
       }
       if (action.type === 'update_note') {
-        const noteId = resolveTargetNoteId(action);
         if (!noteId || !action.content) return;
         dispatch({ type: 'UPDATE_NOTE', payload: { id: noteId, content: action.content } });
         summaries.push('Updated note content');
@@ -126,7 +132,6 @@ export function AIChat() {
         summaries.push(`Created note "${action.title}"`);
       }
       if (action.type === 'delete_note') {
-        const noteId = resolveTargetNoteId(action);
         if (!noteId) return;
         dispatch({ type: 'DELETE_NOTE', payload: noteId });
         summaries.push('Deleted a note');
@@ -141,6 +146,7 @@ export function AIChat() {
   const isApiProvider = isCredentialProvider;
   const hasApiConfig = !!aiSettings.apiKey && !!aiSettings.model;
   const hasLocalConfig = !!aiSettings.localModelPath;
+  const localModelLabel = aiSettings.localModelPath.split(/[\\/]/).pop() || 'model.gguf';
 
   const sendMessage = useCallback(async () => {
     const trimmed = input.trim();
@@ -163,11 +169,12 @@ export function AIChat() {
     const chatHistory = aiMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
 
     await askFlintAI(
-      trimmed,
-      notes,
-      activeNoteId,
-      aiSettings,
-      chatHistory,
+        trimmed,
+        notes,
+        activeNoteId,
+        openTabs,
+        aiSettings,
+        chatHistory,
       (chunk) => {
         if (abortRef.current) return;
         setStreamContent(prev => prev + chunk);
@@ -200,7 +207,7 @@ export function AIChat() {
         setStreamContent('');
       },
     );
-  }, [input, isStreaming, notes, activeNoteId, aiMessages, aiSettings, dispatch]);
+  }, [input, isStreaming, notes, activeNoteId, openTabs, aiMessages, aiSettings, dispatch]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -228,34 +235,36 @@ export function AIChat() {
   const isOllamaMode = isAgentMode && aiSettings.provider === 'ollama' && ollamaStatus === 'connected' && !!aiSettings.model;
   const isCloudMode = isAgentMode && isApiProvider && hasApiConfig;
   const isLocalMode = isAgentMode && isLocalProvider && hasLocalConfig;
+  const isConfiguredMode = isOllamaMode || isCloudMode || isLocalMode;
   const providerName = aiSettings.provider === 'openai' ? 'OpenAI' : aiSettings.provider === 'gemini' ? 'Gemini' : aiSettings.provider === 'openai-compatible' ? 'Custom API' : aiSettings.provider === 'local-gguf' ? 'Local GGUF' : 'Ollama';
 
   return (
     <div style={{
-      width: 380, height: '100%', background: '#080808',
-      borderLeft: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column',
+      width: 392, height: '100%', background: '#171b21',
+      borderLeft: '1px solid #303744', display: 'flex', flexDirection: 'column',
+      boxShadow: 'inset 1px 0 0 rgba(255,255,255,0.03)',
     }}>
       {/* Header */}
       <div style={{
-        padding: '10px 14px', borderBottom: '1px solid #1a1a1a',
+        padding: '10px 14px', borderBottom: '1px solid #303744',
         display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
-        background: '#060606',
+        background: 'linear-gradient(180deg, #1d222b, #171b21)',
       }}>
         <div style={{
-          width: 30, height: 30, borderRadius: 8, background: '#111',
+          width: 30, height: 30, borderRadius: 8, background: '#232934',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          border: '1px solid #222',
+          border: '1px solid #394252',
         }}>
           <FlintLogo size={16} />
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#aaa' }}>Flint AI</div>
-          <div className="flex items-center gap-1" style={{ fontSize: 10, color: isOllamaMode || isCloudMode || isLocalMode ? '#5a5' : isAgentMode ? '#855' : '#655' }}>
-            {(isOllamaMode || isCloudMode || isLocalMode) ? <Wifi size={8} /> : isAgentMode ? <Server size={8} /> : <Cpu size={8} />}
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#d5dbe5' }}>Flint AI</div>
+          <div className="flex items-center gap-1" style={{ fontSize: 10, color: isConfiguredMode ? '#9fc59d' : isAgentMode ? '#d0b08a' : '#bf8d8d' }}>
+            {isConfiguredMode ? <Wifi size={8} /> : isAgentMode ? <Server size={8} /> : <Cpu size={8} />}
             {isOllamaMode
               ? `Ollama · ${aiSettings.model}`
               : isLocalMode
-              ? `Local GGUF · ${aiSettings.localModelPath.split('/').pop() || 'model.gguf'}`
+              ? `Self-hosted GGUF · ${localModelLabel}`
               : isCloudMode
               ? `${providerName} · ${aiSettings.model}`
               : isAgentMode
@@ -264,11 +273,11 @@ export function AIChat() {
           </div>
         </div>
         <button onClick={() => setShowConfig(!showConfig)} title="AI Settings"
-          style={{ background: 'none', border: 'none', color: showConfig ? '#888' : '#444', cursor: 'pointer', display: 'flex', padding: 4 }}>
+          style={{ background: 'none', border: 'none', color: showConfig ? '#c6cfdb' : '#758091', cursor: 'pointer', display: 'flex', padding: 4 }}>
           <Settings size={14} />
         </button>
         <button onClick={() => dispatch({ type: 'TOGGLE_AI_CHAT' })} title="Close"
-          style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', display: 'flex', padding: 4 }}>
+          style={{ background: 'none', border: 'none', color: '#758091', cursor: 'pointer', display: 'flex', padding: 4 }}>
           <X size={14} />
         </button>
       </div>
@@ -276,14 +285,14 @@ export function AIChat() {
       {/* Agent status banner */}
       {agentStatus === 'agent-down' && (
         <div style={{
-          padding: '8px 14px', borderBottom: '1px solid #1a1a1a', background: '#0a0800',
+          padding: '8px 14px', borderBottom: '1px solid #303744', background: '#2a2320',
           flexShrink: 0,
         }}>
-          <div className="flex items-center gap-2" style={{ fontSize: 10, color: '#886' }}>
+          <div className="flex items-center gap-2" style={{ fontSize: 10, color: '#deb998' }}>
             <AlertTriangle size={10} />
             <span>Python agent not running — using browser fallback</span>
           </div>
-          <div style={{ fontSize: 9, color: '#554', marginTop: 4, fontFamily: 'monospace', background: '#050500', padding: '4px 6px', borderRadius: 4, border: '1px solid #1a1a00' }}>
+          <div style={{ fontSize: 9, color: '#d9c1a5', marginTop: 4, fontFamily: 'monospace', background: '#1e1815', padding: '4px 6px', borderRadius: 4, border: '1px solid #5c4837' }}>
             python3 ~/.flint/agent/agent.py
           </div>
         </div>
@@ -291,36 +300,36 @@ export function AIChat() {
 
       {/* Memory stats */}
       <div style={{
-        padding: '6px 14px', borderBottom: '1px solid #1a1a1a',
-        display: 'flex', gap: 12, background: '#050505', flexShrink: 0,
+        padding: '6px 14px', borderBottom: '1px solid #303744',
+        display: 'flex', gap: 12, background: '#14181e', flexShrink: 0,
       }}>
-        <div className="flex items-center gap-1" style={{ fontSize: 9, color: '#444' }}>
+        <div className="flex items-center gap-1" style={{ fontSize: 9, color: '#8893a4' }}>
           <Brain size={8} /> {memoryStats.notes} notes
         </div>
-        <div className="flex items-center gap-1" style={{ fontSize: 9, color: '#444' }}>
+        <div className="flex items-center gap-1" style={{ fontSize: 9, color: '#8893a4' }}>
           <Network size={8} /> {memoryStats.connections} links
         </div>
-        <div className="flex items-center gap-1" style={{ fontSize: 9, color: '#444' }}>
+        <div className="flex items-center gap-1" style={{ fontSize: 9, color: '#8893a4' }}>
           <Sparkles size={8} /> {memoryStats.tags} tags
         </div>
-        <div className="flex items-center gap-1" style={{ fontSize: 9, color: aiSettings.internetAccess ? '#565' : '#444' }}>
+        <div className="flex items-center gap-1" style={{ fontSize: 9, color: aiSettings.internetAccess ? '#9fc59d' : '#8893a4' }}>
           <Globe size={8} /> {aiSettings.internetAccess ? 'Web on' : 'Web off'}
         </div>
       </div>
 
       {/* Config panel */}
       {showConfig && (
-        <div style={{ padding: 12, borderBottom: '1px solid #1a1a1a', background: '#060606', flexShrink: 0 }}>
-          <div style={{ fontSize: 10, color: '#555', marginBottom: 8, padding: '4px 8px', background: '#0a0a0a', borderRadius: 4, border: '1px solid #1a1a1a' }}>
+        <div style={{ padding: 12, borderBottom: '1px solid #303744', background: '#171b21', flexShrink: 0 }}>
+          <div style={{ fontSize: 10, color: '#96a1b2', marginBottom: 8, padding: '4px 8px', background: '#1e232b', borderRadius: 4, border: '1px solid #303744' }}>
             {isOllamaMode
               ? `Agent + Ollama (${aiSettings.model}) — full AI`
               : isLocalMode
-              ? `Agent + Local GGUF (${aiSettings.localModelPath.split('/').pop() || 'model.gguf'}) — full AI`
+              ? `Agent + self-hosted GGUF (${localModelLabel}) — direct local AI`
               : isCloudMode
               ? `Agent + ${providerName} (${aiSettings.model}) — full AI`
               : isAgentMode
               ? isLocalProvider
-                ? 'Agent running — set GGUF model path to enable local model'
+                ? 'Agent running — set a GGUF file path and Flint will route prompts to the local self-hosted model'
                 : isApiProvider
                 ? `Agent running — add API key + model for ${providerName}`
                 : `Agent running — no Ollama. Install: ollama pull llama3.2`
@@ -331,7 +340,7 @@ export function AIChat() {
               onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { provider: e.target.value as 'ollama' | 'openai' | 'gemini' | 'openai-compatible' | 'local-gguf' } })}
               style={{ ...inputStyle, fontSize: 11 }}>
               <option value="ollama">Ollama (local)</option>
-              <option value="local-gguf">Local GGUF file</option>
+              <option value="local-gguf">Self-hosted GGUF</option>
               <option value="openai">OpenAI</option>
               <option value="gemini">Gemini</option>
               <option value="openai-compatible">OpenAI-compatible</option>
@@ -393,7 +402,7 @@ export function AIChat() {
             ) : (
               <input type="text" value={aiSettings.model}
                 onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { model: e.target.value } })}
-                placeholder={aiSettings.provider === 'openai' ? 'e.g. gpt-4o-mini' : aiSettings.provider === 'gemini' ? 'e.g. gemini-1.5-flash' : aiSettings.provider === 'openai-compatible' ? 'Provider model id' : aiSettings.provider === 'local-gguf' ? 'Optional alias' : 'e.g. llama3.2, mistral, codellama'}
+                placeholder={aiSettings.provider === 'openai' ? 'e.g. gpt-4o-mini' : aiSettings.provider === 'gemini' ? 'e.g. gemini-1.5-flash' : aiSettings.provider === 'openai-compatible' ? 'Provider model id' : aiSettings.provider === 'local-gguf' ? 'Optional alias for this GGUF' : 'e.g. llama3.2, mistral, codellama'}
                 style={{ ...inputStyle, fontSize: 11 }} />
             )}
           </ConfigField>

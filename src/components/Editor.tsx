@@ -207,6 +207,7 @@ export function Editor({ noteId }: { noteId: string }) {
       onDrop={handleDrop}
       placeholder="Start writing..."
       spellCheck={false}
+      style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02)' }}
     />
   );
 }
