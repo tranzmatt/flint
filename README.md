@@ -12,13 +12,37 @@
 
 # Flint 
 
-- A **secure, local-first knowledge base** with AI-powered intelligence. Your notes, your graph, your AI — all running locally on your machine.
+> - A **secure, local-first knowledge base** with AI-powered intelligence. Your notes, your graph, your AI — all running locally on your machine.
 
 ---
 
-https://github.com/user-attachments/assets/dbd70229-1ea6-499c-9fdd-476cdb581a79
+https://github.com/user-attachments/assets/94fa53f9-b3b6-4df8-9038-3f763aec54d4
 
 ---
+
+##  Installation
+
+### Prerequisites
+- **Node.js** 18+ — [Install](https://nodejs.org)
+- **Python 3** (for AI Agent) — `sudo apt install python3 python3-pip`
+- **Ollama** (for AI) — [Install](https://ollama.ai) then `ollama pull llama3.2`
+
+### Install with 
+```bash
+git clone https://github.com/Chintanpatel24/flint.git
+cd flint
+bash install.sh
+bash update.sh
+npm audit fix --force
+```
+
+### for devloping ,
+```bash
+git clone --branch test-api --single-branch https://github.com/Chintanpatel24/flint.git
+```
+
+---
+
 ## Features
 
 ### Note-Taking
@@ -49,29 +73,3 @@ https://github.com/user-attachments/assets/dbd70229-1ea6-499c-9fdd-476cdb581a79
 - **localStorage** for persistence
 - **No external API calls** (except Wikipedia when internet access is enabled)
 - **File System Access API** to open any local folder as a vault
-
----
-
-##  Installation
-
-### Prerequisites
-- **Node.js** 18+ — [Install](https://nodejs.org)
-- **Python 3** (for AI Agent) — `sudo apt install python3 python3-pip`
-- **Ollama** (for AI) — [Install](https://ollama.ai) then `ollama pull llama3.2`
-
-### Install with 
-```bash
-git clone https://github.com/Chintanpatel24/flint.git
-cd flint
-bash install.sh
-bash update.sh
-npm audit fix --force
-```
-for devloping , 
-```bash
-git clone --branch test-api --single-branch https://github.com/Chintanpatel24/flint.git
-```
-
-After install, Flint appears in your **app menu**. Or run `flint` from terminal.
-
----
