@@ -10,7 +10,7 @@
 
 ---
 
-# *Flint* 
+# ***Flint*** 
 
 > - A **secure, local-first knowledge base** with AI-powered intelligence. Your notes, your graph, your AI - all running locally on your machine.
 
@@ -20,7 +20,7 @@
 
 ---
 
->##  Video Overview of Flint  !!
+##  Video Overview of Flint  !!
 
 <details>
        
@@ -34,7 +34,7 @@ https://github.com/user-attachments/assets/eab43b70-609a-4373-8f2c-8afc854dece9
 
 ---
 
->##  Installation
+##  Installation
 
 ### For useres (Linux/Mac)
 ```bash
@@ -58,7 +58,7 @@ git clone --branch <branch name> --single-branch https://github.com/Chintanpatel
 
 ---
 
->## Features
+## Features
 
 >### Note-Taking
 - Full **Markdown** support with live preview
