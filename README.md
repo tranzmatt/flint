@@ -1,6 +1,6 @@
 <div align=center>
        
-<img src="public/flint-logo.png" style="width: 30%; height: auto;"> 
+<img src="public/flint-logo.png" style="width: 15%; height: auto;"> 
 <br>
 
 ![Flint](https://img.shields.io/badge/version-1.0.0-amber?style=flat-square)
