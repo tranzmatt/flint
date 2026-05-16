@@ -90,5 +90,5 @@ git clone --branch <branch name> --single-branch https://github.com/Chintanpatel
 
 ---
 
-> [!NOTE]  
->If the old version gets installed in your system, you can install it by downloading the flint.zip and then installing it in your system. By this, the hope is that the new version of flint gets installed in your system. 
+> [!IMPORTANT]  
+>Please inform me by creating an issue regarding your installation. After an installation, it makes your desktop slow, or it works fine, because after some changes it's not working as functionally and fastly as last. 
