@@ -91,5 +91,4 @@ git clone --branch <branch name> --single-branch https://github.com/Chintanpatel
 ---
 
 > [!NOTE]  
-> the new version does not get installed by the clone in default.  
 >If the old version gets installed in your system, you can install it by downloading the flint.zip and then installing it in your system. By this, the hope is that the new version of flint gets installed in your system. 
