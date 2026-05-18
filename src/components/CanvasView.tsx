@@ -1,481 +1,483 @@
-import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useStore } from '../store';
 import { FlintLogo } from './FlintLogo';
-import { X, ZoomIn, ZoomOut, RotateCcw, Search, Maximize2 } from 'lucide-react';
+import { Grip, RotateCcw, Search, X, Plus, Type, Trash2, FileText } from 'lucide-react';
+import type { CanvasCard } from '../types';
 
-interface GNode {
-  id: string;
-  title: string;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  conns: number;
-}
-
-interface GEdge {
-  from: string;
-  to: string;
-}
-
-export function GraphView() {
+export function CanvasView() {
   const { state, dispatch } = useStore();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const nodesRef = useRef<GNode[]>([]);
-  const edgesRef = useRef<GEdge[]>([]);
-  const dragRef = useRef<string | null>(null);
-  const wasDragRef = useRef(false);
-  const panRef = useRef({ x: 0, y: 0, dragging: false, startX: 0, startY: 0 });
-  const zoomRef = useRef(1);
-  const animRef = useRef(0);
-  const hoverRef = useRef<string | null>(null);
-  const sizeRef = useRef({ w: 0, h: 0 });
-
   const [query, setQuery] = useState('');
-  const [stats, setStats] = useState({ nodes: 0, edges: 0 });
   const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null);
+  const canvasDragRef = useRef<{ x: number; y: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Build graph from notes
-  const buildGraph = useCallback(() => {
-    const links: Record<string, Set<string>> = {};
-    const titleMap = new Map(state.notes.map(n => [n.title.toLowerCase(), n.id]));
+  const activeVaultId = state.activeVaultId;
+  const workspace = activeVaultId ? state.vaultData[activeVaultId] : null;
+  const cards = workspace?.canvasCards || [];
 
-    state.notes.forEach(n => { links[n.id] = new Set(); });
-    state.notes.forEach(n => {
-      const matches = n.content.matchAll(/\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]/g);
-      for (const m of matches) {
-        const targetId = titleMap.get(m[1].toLowerCase());
-        if (targetId && targetId !== n.id) {
-          links[n.id].add(targetId);
-          links[targetId]?.add(n.id);
-        }
-      }
-    });
+  const updateCards = useCallback((newCards: CanvasCard[]) => {
+    dispatch({ type: 'UPDATE_CANVAS_CARDS', payload: newCards });
+  }, [dispatch]);
 
-    const cx = sizeRef.current.w / 2 || 400;
-    const cy = sizeRef.current.h / 2 || 300;
-
-    // Preserve existing positions
-    const existing = new Map(nodesRef.current.map(n => [n.id, { x: n.x, y: n.y }]));
-
-    nodesRef.current = state.notes.map(n => {
-      const pos = existing.get(n.id);
-      return {
-        id: n.id,
-        title: n.title,
-        x: pos?.x ?? cx + (Math.random() - 0.5) * 400,
-        y: pos?.y ?? cy + (Math.random() - 0.5) * 300,
-        vx: 0,
-        vy: 0,
-        conns: links[n.id]?.size || 0,
-      };
-    });
-
-    const edgeSet = new Set<string>();
-    edgesRef.current = [];
-    state.notes.forEach(n => {
-      const matches = n.content.matchAll(/\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]/g);
-      for (const m of matches) {
-        const targetId = titleMap.get(m[1].toLowerCase());
-        if (targetId && targetId !== n.id) {
-          const key = [n.id, targetId].sort().join('-');
-          if (!edgeSet.has(key)) {
-            edgeSet.add(key);
-            edgesRef.current.push({ from: n.id, to: targetId });
-          }
-        }
-      }
-    });
-
-    setStats({ nodes: nodesRef.current.length, edges: edgesRef.current.length });
-  }, [state.notes]);
-
-  // Canvas resize
+  // Initial layout
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (activeVaultId && cards.length === 0 && state.notes.length > 0) {
+      const initialCards: CanvasCard[] = state.notes.slice(0, 20).map((note, index) => {
+        const col = index % 4;
+        const row = Math.floor(index / 4);
+        return {
+          id: note.id,
+          type: 'note',
+          noteId: note.id,
+          x: 60 + col * 300,
+          y: 80 + row * 200,
+          w: 240,
+          h: 140,
+        };
+      });
+      updateCards(initialCards);
+    }
+  }, [activeVaultId]);
 
-    const resize = () => {
-      const parent = canvas.parentElement!;
-      const rect = parent.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-      sizeRef.current = { w: rect.width, h: rect.height };
-    };
-
-    resize();
-    window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
-  }, []);
-
-  useEffect(() => { buildGraph(); }, [buildGraph]);
-
-  // Filtered nodes based on search
-  const visibleNodeIds = useMemo(() => {
-    if (!query.trim()) return null;
+  const filteredCards = useMemo(() => {
+    if (!query.trim()) return cards;
     const q = query.toLowerCase();
-    const ids = new Set<string>();
-    nodesRef.current.forEach(n => {
-      if (n.title.toLowerCase().includes(q)) {
-        ids.add(n.id);
+    return cards.filter(card => {
+      if (card.type === 'note' && card.noteId) {
+        const note = state.notes.find(n => n.id === card.noteId);
+        return note && (
+          note.title.toLowerCase().includes(q) ||
+          note.content.toLowerCase().includes(q)
+        );
+      }
+      return card.content?.toLowerCase().includes(q);
+    });
+  }, [cards, query, state.notes]);
+
+  const edges = useMemo(() => {
+    const filteredIds = new Set(filteredCards.map(c => c.id));
+    const noteTitleIdMap = new Map(
+      state.notes.map(note => [note.title.toLowerCase(), note.id])
+    );
+    const pairs = new Set<string>();
+    const list: Array<{ from: string; to: string }> = [];
+
+    filteredCards.forEach(card => {
+      if (card.type !== 'note' || !card.noteId) return;
+      const note = state.notes.find(n => n.id === card.noteId);
+      if (!note) return;
+
+      const matches = note.content.matchAll(/\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]/g);
+      for (const match of matches) {
+        const targetId = noteTitleIdMap.get(match[1].toLowerCase());
+        if (!targetId || !filteredIds.has(targetId) || targetId === note.id) continue;
+        const key = [note.id, targetId].sort().join('::');
+        if (pairs.has(key)) continue;
+        pairs.add(key);
+        list.push({ from: note.id, to: targetId });
       }
     });
-    // Also include connected nodes
-    edgesRef.current.forEach(e => {
-      if (ids.has(e.from)) ids.add(e.to);
-      if (ids.has(e.to)) ids.add(e.from);
-    });
-    return ids;
-  }, [query, stats]);
+    return list;
+  }, [filteredCards, state.notes]);
 
-  // Main render loop
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d')!;
-    let running = true;
-
-    const getNode = (id: string) => nodesRef.current.find(n => n.id === id);
-
-    const simulate = () => {
-      const nodes = nodesRef.current;
-      const edges = edgesRef.current;
-      const cx = sizeRef.current.w / 2;
-      const cy = sizeRef.current.h / 2;
-
-      // Repulsion
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const dx = nodes[j].x - nodes[i].x;
-          const dy = nodes[j].y - nodes[i].y;
-          const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
-          const force = 3000 / (dist * dist);
-          const fx = (dx / dist) * force;
-          const fy = (dy / dist) * force;
-          nodes[i].vx -= fx;
-          nodes[i].vy -= fy;
-          nodes[j].vx += fx;
-          nodes[j].vy += fy;
-        }
-      }
-
-      // Springs
-      for (const e of edges) {
-        const a = getNode(e.from);
-        const b = getNode(e.to);
-        if (!a || !b) continue;
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
-        const force = (dist - 120) * 0.006;
-        const fx = (dx / dist) * force;
-        const fy = (dy / dist) * force;
-        a.vx += fx;
-        a.vy += fy;
-        b.vx -= fx;
-        b.vy -= fy;
-      }
-
-      // Center pull
-      for (const n of nodes) {
-        n.vx += (cx - n.x) * 0.0003;
-        n.vy += (cy - n.y) * 0.0003;
-      }
-
-      // Apply velocities
-      for (const n of nodes) {
-        if (n.id === dragRef.current) {
-          n.vx = 0;
-          n.vy = 0;
-          continue;
-        }
-        n.vx *= 0.85;
-        n.vy *= 0.85;
-        const speed = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
-        if (speed > 8) {
-          n.vx = (n.vx / speed) * 8;
-          n.vy = (n.vy / speed) * 8;
-        }
-        n.x += n.vx;
-        n.y += n.vy;
-      }
-    };
-
-    const draw = () => {
-      if (!running) return;
-      simulate();
-
-      const w = canvas.width;
-      const h = canvas.height;
-      const z = zoomRef.current;
-      const p = panRef.current;
-      const nodes = nodesRef.current;
-      const edges = edgesRef.current;
-      const activeId = state.activeNoteId;
-      const q = query.toLowerCase();
-
-      // Clear
-      ctx.fillStyle = '#1a1a1a';
-      ctx.fillRect(0, 0, w, h);
-
-      // Grid dots
-      ctx.fillStyle = 'rgba(255,255,255,0.03)';
-      const gridSize = 50 * z;
-      if (gridSize > 10) {
-        const ox = ((p.x % gridSize) + gridSize) % gridSize;
-        const oy = ((p.y % gridSize) + gridSize) % gridSize;
-        for (let x = ox; x < w; x += gridSize) {
-          for (let y = oy; y < h; y += gridSize) {
-            ctx.beginPath();
-            ctx.arc(x, y, 1, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-      }
-
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.scale(z, z);
-
-      const isVisible = (id: string) => !visibleNodeIds || visibleNodeIds.has(id);
-      const matchesQuery = (n: GNode) => !q || n.title.toLowerCase().includes(q);
-
-      // Edges
-      for (const e of edges) {
-        const a = getNode(e.from);
-        const b = getNode(e.to);
-        if (!a || !b) continue;
-        if (!isVisible(a.id) && !isVisible(b.id)) continue;
-
-        const isActive = activeId === e.from || activeId === e.to;
-        const isHover = hoverRef.current === e.from || hoverRef.current === e.to;
-
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.strokeStyle = isActive
-          ? 'rgba(180,180,180,0.6)'
-          : isHover
-          ? 'rgba(150,150,150,0.5)'
-          : 'rgba(100,100,100,0.25)';
-        ctx.lineWidth = isActive ? 1.5 : 1;
-        ctx.stroke();
-      }
-
-      // Nodes
-      for (const n of nodes) {
-        if (!isVisible(n.id)) continue;
-
-        const isActive = n.id === activeId;
-        const isHover = n.id === hoverRef.current;
-        const isOrphan = n.conns === 0;
-        const dimmed = q && !matchesQuery(n);
-        
-        const baseRadius = 3 + Math.min(n.conns, 10) * 0.8;
-        const radius = isActive ? baseRadius + 2 : baseRadius;
-
-        // Glow for active/hover
-        if (isActive || isHover) {
-          ctx.beginPath();
-          ctx.arc(n.x, n.y, radius + 8, 0, Math.PI * 2);
-          ctx.fillStyle = isActive ? 'rgba(200,200,200,0.15)' : 'rgba(150,150,150,0.1)';
-          ctx.fill();
-        }
-
-        // Node
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
-
-        if (dimmed) {
-          ctx.fillStyle = 'rgba(60,60,60,0.4)';
-        } else if (isActive) {
-          ctx.fillStyle = '#e0e0e0';
-        } else if (isOrphan) {
-          ctx.fillStyle = 'rgba(100,100,100,0.5)';
-        } else {
-          const brightness = Math.min(140 + n.conns * 8, 200);
-          ctx.fillStyle = `rgb(${brightness},${brightness},${brightness})`;
-        }
-        ctx.fill();
-
-        // Border for active
-        if (isActive) {
-          ctx.strokeStyle = '#fff';
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-        }
-
-        // Label
-        if (isActive || isHover) {
-          ctx.font = `${isActive ? '600' : '400'} 11px -apple-system, BlinkMacSystemFont, sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.fillStyle = isActive ? '#fff' : 'rgba(200,200,200,0.9)';
-          ctx.fillText(n.title, n.x, n.y + radius + 14);
-        }
-      }
-
-      ctx.restore();
-      animRef.current = requestAnimationFrame(draw);
-    };
-
-    animRef.current = requestAnimationFrame(draw);
-    return () => {
-      running = false;
-      cancelAnimationFrame(animRef.current);
-    };
-  }, [state.activeNoteId, state.notes, query, visibleNodeIds]);
-
-  const getNodeAt = useCallback((mx: number, my: number) => {
-    const z = zoomRef.current;
-    const p = panRef.current;
-    const wx = (mx - p.x) / z;
-    const wy = (my - p.y) / z;
-    
-    for (const n of [...nodesRef.current].reverse()) {
-      const r = 3 + Math.min(n.conns, 10) * 0.8 + 8;
-      if ((wx - n.x) ** 2 + (wy - n.y) ** 2 < r * r) return n;
-    }
-    return null;
-  }, []);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    const node = getNodeAt(mx, my);
-
-    wasDragRef.current = false;
-
-    if (node) {
-      dragRef.current = node.id;
-    } else {
-      panRef.current.dragging = true;
-      panRef.current.startX = e.clientX - panRef.current.x;
-      panRef.current.startY = e.clientY - panRef.current.y;
-    }
+  const updateCard = (id: string, updates: Partial<CanvasCard>) => {
+    updateCards(cards.map(c => c.id === id ? { ...c, ...updates } : c));
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
+  const addTextCard = () => {
+    const newCard: CanvasCard = {
+      id: `text-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      type: 'text',
+      content: '',
+      x: Math.round((400 - pan.x) / zoom),
+      y: Math.round((300 - pan.y) / zoom),
+      w: 220,
+      h: 140,
+    };
+    updateCards([...cards, newCard]);
+  };
 
+  const deleteCard = (id: string) => {
+    updateCards(cards.filter(c => c.id !== id));
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (dragRef.current) {
-      wasDragRef.current = true;
-      const z = zoomRef.current;
-      const p = panRef.current;
-      const node = nodesRef.current.find(n => n.id === dragRef.current);
-      if (node) {
-        node.x = (mx - p.x) / z;
-        node.y = (my - p.y) / z;
-        node.vx = 0;
-        node.vy = 0;
-      }
-    } else if (panRef.current.dragging) {
-      panRef.current.x = e.clientX - panRef.current.startX;
-      panRef.current.y = e.clientY - panRef.current.startY;
-    } else {
-      const node = getNodeAt(mx, my);
-      hoverRef.current = node?.id || null;
-      canvasRef.current!.style.cursor = node ? 'pointer' : 'grab';
+      updateCard(dragRef.current.id, {
+        x: Math.round((e.clientX - pan.x - dragRef.current.offsetX) / zoom),
+        y: Math.round((e.clientY - pan.y - dragRef.current.offsetY) / zoom),
+      });
+    } else if (canvasDragRef.current) {
+      setPan({
+        x: e.clientX - canvasDragRef.current.x,
+        y: e.clientY - canvasDragRef.current.y,
+      });
     }
   };
 
   const handleMouseUp = () => {
     dragRef.current = null;
-    panRef.current.dragging = false;
+    canvasDragRef.current = null;
+    if (containerRef.current) {
+      containerRef.current.style.cursor = 'default';
+    }
   };
 
-  const handleClick = (e: React.MouseEvent) => {
-    if (wasDragRef.current) {
-      wasDragRef.current = false;
-      return;
-    }
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const node = getNodeAt(e.clientX - rect.left, e.clientY - rect.top);
-    if (node) {
-      dispatch({ type: 'OPEN_TAB', payload: node.id });
+  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    canvasDragRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+    if (containerRef.current) {
+      containerRef.current.style.cursor = 'grabbing';
     }
   };
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    
-    const oldZ = zoomRef.current;
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newZ = Math.max(0.1, Math.min(5, oldZ * delta));
-    
-    // Zoom toward cursor
-    panRef.current.x = mx - (mx - panRef.current.x) * (newZ / oldZ);
-    panRef.current.y = my - (my - panRef.current.y) * (newZ / oldZ);
-    
-    zoomRef.current = newZ;
-    setZoom(newZ);
+    if (e.ctrlKey || e.metaKey) {
+      const rect = containerRef.current!.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const delta = e.deltaY > 0 ? 0.92 : 1.08;
+      const newZoom = Math.max(0.15, Math.min(4, zoom * delta));
+      setPan(p => ({
+        x: mx - (mx - p.x) * (newZoom / zoom),
+        y: my - (my - p.y) * (newZoom / zoom),
+      }));
+      setZoom(newZoom);
+    } else {
+      setPan(p => ({
+        x: p.x - e.deltaX,
+        y: p.y - e.deltaY,
+      }));
+    }
   };
 
-  const handleZoom = (delta: number) => {
-    const cx = sizeRef.current.w / 2;
-    const cy = sizeRef.current.h / 2;
-    const oldZ = zoomRef.current;
-    const newZ = Math.max(0.1, Math.min(5, oldZ + delta));
-    
-    panRef.current.x = cx - (cx - panRef.current.x) * (newZ / oldZ);
-    panRef.current.y = cy - (cy - panRef.current.y) * (newZ / oldZ);
-    
-    zoomRef.current = newZ;
-    setZoom(newZ);
+  const resetLayout = () => {
+    if (confirm('Reset canvas layout? All card positions and text cards will be cleared.')) {
+      updateCards([]);
+      setPan({ x: 0, y: 0 });
+      setZoom(1);
+    }
   };
 
-  const resetView = () => {
-    zoomRef.current = 1;
-    panRef.current = { x: 0, y: 0, dragging: false, startX: 0, startY: 0 };
-    setZoom(1);
-    buildGraph();
-  };
+  const findCard = (id: string) => filteredCards.find(c => c.id === id);
 
-  const centerGraph = () => {
-    if (nodesRef.current.length === 0) return;
-    
-    let minX = Infinity, maxX = -Infinity;
-    let minY = Infinity, maxY = -Infinity;
-    
-    nodesRef.current.forEach(n => {
-      minX = Math.min(minX, n.x);
-      maxX = Math.max(maxX, n.x);
-      minY = Math.min(minY, n.y);
-      maxY = Math.max(maxY, n.y);
-    });
-    
-    const graphCx = (minX + maxX) / 2;
-    const graphCy = (minY + maxY) / 2;
-    const screenCx = sizeRef.current.w / 2;
-    const screenCy = sizeRef.current.h / 2;
-    
-    panRef.current.x = screenCx - graphCx * zoomRef.current;
-    panRef.current.y = screenCy - graphCy * zoomRef.current;
-  };
+  const borderColor = 'rgba(255,255,255,0.08)';
+  const surfaceBg = 'rgba(30,30,30,0.95)';
 
   return (
     <div
-      className="fixed inset-0 animate-fade-in"
+      ref={containerRef}
+      className="fixed inset-0 animate-fade-in overflow-hidden select-none"
       style={{ zIndex: 110, background: '#1a1a1a' }}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      onWheel={handleWheel}
     >
-      {/* Canvas */}
-      <canvas
-        ref={canvasRef}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onClick={handleClick}
-        onWheel={handleWheel}
-        style={{ display: 'block', width: '100%', height: '100%', cursor: 'grab' }}
+      {/* Dot grid background */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)`,
+          backgroundSize: `${28 * zoom}px ${28 * zoom}px`,
+          backgroundPosition: `${pan.x % (28 * zoom)}px ${pan.y % (28 * zoom)}px`,
+          pointerEvents: 'none',
+        }}
       />
 
-      {/* Header */}
+      {/* SVG edge layer */}
+      <svg
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          overflow: 'visible',
+        }}
+      >
+        <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
+          <defs>
+            <marker
+              id="arrow"
+              markerWidth="6"
+              markerHeight="6"
+              refX="5"
+              refY="3"
+              orient="auto"
+            >
+              <path
+                d="M0,0 L0,6 L6,3 z"
+                fill="rgba(255,255,255,0.2)"
+              />
+            </marker>
+          </defs>
+          {edges.map(edge => {
+            const from = findCard(edge.from);
+            const to = findCard(edge.to);
+            if (!from || !to) return null;
+
+            const x1 = from.x + from.w / 2;
+            const y1 = from.y + from.h / 2;
+            const x2 = to.x + to.w / 2;
+            const y2 = to.y + to.h / 2;
+
+            // Bezier control points
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const cx1 = x1 + dx * 0.4;
+            const cy1 = y1;
+            const cx2 = x2 - dx * 0.4;
+            const cy2 = y2;
+
+            return (
+              <path
+                key={`${edge.from}-${edge.to}`}
+                d={`M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`}
+                stroke="rgba(255,255,255,0.15)"
+                strokeWidth={1 / zoom}
+                fill="none"
+                markerEnd="url(#arrow)"
+              />
+            );
+          })}
+        </g>
+      </svg>
+
+      {/* Canvas content */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          transformOrigin: '0 0',
+        }}
+        onMouseDown={handleCanvasMouseDown}
+      >
+        {filteredCards.map(card => {
+          const isNote = card.type === 'note';
+          const note = isNote ? state.notes.find(n => n.id === card.noteId) : null;
+          const isActive = isNote && note?.id === state.activeNoteId;
+
+          const previewLines = isNote && note
+            ? note.content
+                .split('\n')
+                .filter(line => line.trim() && !line.startsWith('#'))
+                .slice(0, 5)
+                .join('\n')
+            : '';
+
+          const titleLine = isNote && note
+            ? note.content.split('\n').find(l => l.startsWith('# '))?.replace(/^# /, '') || note.title
+            : 'Text Note';
+
+          return (
+            <div
+              key={card.id}
+              style={{
+                position: 'absolute',
+                left: card.x,
+                top: card.y,
+                width: card.w,
+                minHeight: card.h,
+                background: isActive
+                  ? 'rgba(45,45,48,0.98)'
+                  : surfaceBg,
+                border: `${1 / zoom}px solid ${isActive
+                  ? 'rgba(255,255,255,0.2)'
+                  : borderColor}`,
+                borderRadius: 6 / zoom,
+                boxShadow: isActive
+                  ? '0 8px 32px rgba(0,0,0,0.5)'
+                  : '0 4px 16px rgba(0,0,0,0.4)',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Card header / drag handle */}
+              <div
+                onMouseDown={e => {
+                  e.stopPropagation();
+                  dragRef.current = {
+                    id: card.id,
+                    offsetX: e.clientX - pan.x - card.x * zoom,
+                    offsetY: e.clientY - pan.y - card.y * zoom,
+                  };
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: `${6 / zoom}px ${8 / zoom}px`,
+                  borderBottom: `${1 / zoom}px solid rgba(255,255,255,0.05)`,
+                  cursor: 'grab',
+                  background: 'rgba(0,0,0,0.2)',
+                  flexShrink: 0,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5 / zoom,
+                    minWidth: 0,
+                    flex: 1,
+                  }}
+                >
+                  <Grip
+                    size={9 / zoom}
+                    style={{ color: 'rgba(255,255,255,0.2)', flexShrink: 0 }}
+                  />
+                  {isNote && (
+                    <FileText
+                      size={9 / zoom}
+                      style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }}
+                    />
+                  )}
+                  <span
+                    style={{
+                      fontSize: 11 / zoom,
+                      fontWeight: 500,
+                      color: isActive
+                        ? 'rgba(255,255,255,0.85)'
+                        : 'rgba(255,255,255,0.5)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {titleLine}
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2 / zoom,
+                    flexShrink: 0,
+                  }}
+                >
+                  {isNote && (
+                    <button
+                      onMouseDown={e => e.stopPropagation()}
+                      onClick={e => {
+                        e.stopPropagation();
+                        dispatch({ type: 'OPEN_TAB', payload: card.noteId! });
+                      }}
+                      title="Open note"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'rgba(255,255,255,0.25)',
+                        cursor: 'pointer',
+                        padding: `${2 / zoom}px`,
+                        display: 'flex',
+                        borderRadius: 3 / zoom,
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.color = 'rgba(255,255,255,0.7)';
+                        e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.color = 'rgba(255,255,255,0.25)';
+                        e.currentTarget.style.background = 'none';
+                      }}
+                    >
+                      <Plus size={10 / zoom} />
+                    </button>
+                  )}
+                  <button
+                    onMouseDown={e => e.stopPropagation()}
+                    onClick={e => {
+                      e.stopPropagation();
+                      deleteCard(card.id);
+                    }}
+                    title="Remove from canvas"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'rgba(255,255,255,0.25)',
+                      cursor: 'pointer',
+                      padding: `${2 / zoom}px`,
+                      display: 'flex',
+                      borderRadius: 3 / zoom,
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.color = 'rgba(220,80,80,0.8)';
+                      e.currentTarget.style.background = 'rgba(220,80,80,0.1)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.color = 'rgba(255,255,255,0.25)';
+                      e.currentTarget.style.background = 'none';
+                    }}
+                  >
+                    <Trash2 size={10 / zoom} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Card body */}
+              <div
+                style={{
+                  padding: `${8 / zoom}px ${10 / zoom}px`,
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                {isNote ? (
+                  <div
+                    style={{
+                      fontSize: 11 / zoom,
+                      color: 'rgba(255,255,255,0.45)',
+                      lineHeight: 1.6,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      overflow: 'hidden',
+                      fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+                    }}
+                  >
+                    {previewLines.slice(0, 180) || (
+                      <span style={{ color: 'rgba(255,255,255,0.2)', fontStyle: 'italic' }}>
+                        Empty note
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <textarea
+                    value={card.content || ''}
+                    onChange={e => updateCard(card.id, { content: e.target.value })}
+                    onMouseDown={e => e.stopPropagation()}
+                    placeholder="Write something..."
+                    style={{
+                      flex: 1,
+                      width: '100%',
+                      background: 'none',
+                      border: 'none',
+                      outline: 'none',
+                      color: 'rgba(255,255,255,0.7)',
+                      fontSize: 11 / zoom,
+                      resize: 'none',
+                      fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+                      lineHeight: 1.6,
+                      minHeight: 80 / zoom,
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Header toolbar */}
       <div
         className="flex items-center justify-between"
         style={{
@@ -484,28 +486,65 @@ export function GraphView() {
           left: 0,
           right: 0,
           padding: '10px 16px',
-          background: 'rgba(20, 20, 20, 0.85)',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-          backdropFilter: 'blur(8px)',
+          background: 'rgba(20,20,20,0.88)',
+          borderBottom: `1px solid ${borderColor}`,
+          backdropFilter: 'blur(10px)',
+          zIndex: 10,
         }}
       >
         <div className="flex items-center gap-3">
           <FlintLogo size={14} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.7)' }}>
-            Graph View
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: 'rgba(255,255,255,0.6)',
+            }}
+          >
+            Canvas
           </span>
           <span
             style={{
               fontSize: 10,
-              color: 'rgba(255,255,255,0.4)',
+              color: 'rgba(255,255,255,0.3)',
               background: 'rgba(255,255,255,0.05)',
               padding: '2px 8px',
               borderRadius: 4,
-              border: '1px solid rgba(255,255,255,0.08)',
+              border: `1px solid ${borderColor}`,
             }}
           >
-            {stats.nodes} nodes · {stats.edges} links
+            {filteredCards.length} cards · {edges.length} links
           </span>
+
+          {/* Add text card */}
+          <button
+            onClick={addTextCard}
+            title="Add text card"
+            className="flex items-center gap-2"
+            style={{
+              background: 'rgba(255,255,255,0.05)',
+              border: `1px solid ${borderColor}`,
+              color: 'rgba(255,255,255,0.5)',
+              cursor: 'pointer',
+              padding: '4px 10px',
+              borderRadius: 5,
+              fontSize: 11,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.09)';
+              e.currentTarget.style.color = 'rgba(255,255,255,0.8)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+              e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
+            }}
+          >
+            <Type size={12} />
+            Add card
+          </button>
         </div>
 
         <div className="flex items-center gap-3">
@@ -515,185 +554,122 @@ export function GraphView() {
             style={{
               padding: '6px 10px',
               background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.08)',
+              border: `1px solid ${borderColor}`,
               borderRadius: 6,
             }}
           >
-            <Search size={12} style={{ color: 'rgba(255,255,255,0.4)' }} />
+            <Search size={12} style={{ color: 'rgba(255,255,255,0.3)' }} />
             <input
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Filter nodes..."
+              placeholder="Filter cards..."
               style={{
                 background: 'none',
                 border: 'none',
                 outline: 'none',
-                color: 'rgba(255,255,255,0.9)',
+                color: 'rgba(255,255,255,0.8)',
                 fontSize: 12,
-                width: 140,
+                width: 160,
               }}
             />
+            {query && (
+              <button
+                onClick={() => setQuery('')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'rgba(255,255,255,0.3)',
+                  cursor: 'pointer',
+                  padding: 0,
+                  display: 'flex',
+                }}
+              >
+                <X size={12} />
+              </button>
+            )}
           </div>
 
           {/* Zoom display */}
           <span
             style={{
               fontSize: 10,
-              color: 'rgba(255,255,255,0.4)',
-              minWidth: 40,
+              color: 'rgba(255,255,255,0.3)',
+              fontVariantNumeric: 'tabular-nums',
+              minWidth: 38,
               textAlign: 'center',
             }}
           >
             {Math.round(zoom * 100)}%
           </span>
 
-          {/* Close */}
+          {/* Reset */}
           <button
-            onClick={() => dispatch({ type: 'TOGGLE_GRAPH_VIEW' })}
+            onClick={resetLayout}
+            title="Reset layout"
             style={{
               background: 'none',
               border: 'none',
-              color: 'rgba(255,255,255,0.4)',
+              color: 'rgba(255,255,255,0.3)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              fontSize: 11,
+              padding: '4px 6px',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.color = 'rgba(255,255,255,0.7)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.color = 'rgba(255,255,255,0.3)';
+            }}
+          >
+            <RotateCcw size={13} />
+          </button>
+
+          {/* Close */}
+          <button
+            onClick={() => dispatch({ type: 'TOGGLE_CANVAS_VIEW' })}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'rgba(255,255,255,0.3)',
               cursor: 'pointer',
               display: 'flex',
               padding: 4,
             }}
-            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; }}
+            onMouseEnter={e => {
+              e.currentTarget.style.color = 'rgba(255,255,255,0.8)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.color = 'rgba(255,255,255,0.3)';
+            }}
           >
             <X size={18} />
           </button>
         </div>
       </div>
 
-      {/* Controls */}
+      {/* Hint bar */}
       <div
         style={{
           position: 'absolute',
-          bottom: 16,
-          right: 16,
+          bottom: 14,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          fontSize: 10,
+          color: 'rgba(255,255,255,0.2)',
           display: 'flex',
-          flexDirection: 'column',
-          gap: 2,
-          background: 'rgba(30,30,30,0.9)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: 8,
-          padding: 4,
-          backdropFilter: 'blur(8px)',
+          gap: 12,
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap',
         }}
       >
-        {[
-          { icon: <ZoomIn size={14} />, action: () => handleZoom(0.2), title: 'Zoom in' },
-          { icon: <ZoomOut size={14} />, action: () => handleZoom(-0.2), title: 'Zoom out' },
-          { icon: <Maximize2 size={14} />, action: centerGraph, title: 'Center graph' },
-          { icon: <RotateCcw size={14} />, action: resetView, title: 'Reset view' },
-        ].map((btn, i) => (
-          <button
-            key={i}
-            onClick={btn.action}
-            title={btn.title}
-            style={{
-              width: 32,
-              height: 32,
-              background: 'none',
-              border: 'none',
-              color: 'rgba(255,255,255,0.4)',
-              cursor: 'pointer',
-              borderRadius: 4,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
-              e.currentTarget.style.color = 'rgba(255,255,255,0.8)';
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = 'none';
-              e.currentTarget.style.color = 'rgba(255,255,255,0.4)';
-            }}
-          >
-            {btn.icon}
-          </button>
-        ))}
-      </div>
-
-      {/* Legend */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 16,
-          left: 16,
-          background: 'rgba(30,30,30,0.9)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: 8,
-          padding: '10px 14px',
-          backdropFilter: 'blur(8px)',
-        }}
-      >
-        <div
-          style={{
-            fontSize: 10,
-            fontWeight: 600,
-            color: 'rgba(255,255,255,0.5)',
-            marginBottom: 8,
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
-          }}
-        >
-          Legend
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div className="flex items-center gap-2">
-            <div
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: '#e0e0e0',
-                border: '1px solid #fff',
-              }}
-            />
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>Active note</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: '50%',
-                background: 'rgb(160,160,160)',
-              }}
-            />
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>Connected</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div
-              style={{
-                width: 5,
-                height: 5,
-                borderRadius: '50%',
-                background: 'rgba(100,100,100,0.5)',
-              }}
-            />
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>Orphan</span>
-          </div>
-        </div>
-        <div
-          style={{
-            marginTop: 10,
-            paddingTop: 8,
-            borderTop: '1px solid rgba(255,255,255,0.06)',
-            fontSize: 9,
-            color: 'rgba(255,255,255,0.35)',
-            lineHeight: 1.5,
-          }}
-        >
-          Scroll to zoom · Drag to pan
-          <br />
-          Click node to open
-        </div>
+        <span>Scroll to pan</span>
+        <span>·</span>
+        <span>Ctrl+Scroll to zoom</span>
+        <span>·</span>
+        <span>Drag header to move card</span>
       </div>
     </div>
   );
