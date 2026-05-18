@@ -19,10 +19,13 @@ FLINT_APP="$FLINT_DIR/app"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo ""
-echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BOLD}  ⬡ Flint — Local Knowledge Base${NC}"
-echo -e "${DIM}  Secure, private, desktop-first + AI Agent${NC}"
-echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
+echo -e "███████╗██╗     ██╗███╗   ██╗████████╗ "
+echo -e "██╔════╝██║     ██║████╗  ██║╚══██╔══╝ "
+echo -e "█████╗  ██║     ██║██╔██╗ ██║   ██║    "
+echo -e "██╔══╝  ██║     ██║██║╚██╗██║   ██║    "
+echo -e "██║     ███████╗██║██║ ╚████║   ██║    "
+echo -e "╚═╝     ╚══════╝╚═╝╚═╝  ╚═══╝   ╚═╝    "
 echo ""
 
 # ---- Step 1: Check Node.js ----
