@@ -29,15 +29,15 @@ export function GraphView() {
   const [filterQuery, setFilterQuery] = useState('');
   const [depthFilter, setDepthFilter] = useState(0);
   const [showAllLabels, setShowAllLabels] = useState(false);
-  const [nodeScale, setNodeScale] = useState(1);
-  const [linkDistance, setLinkDistance] = useState(160);
-  const [centerForce, setCenterForce] = useState(0.0008);
-  const [groupPull, setGroupPull] = useState(0.005);
+  const [nodeScale, setNodeScale] = useState(2.5);
+  const [linkDistance, setLinkDistance] = useState(320);
+  const [centerForce, setCenterForce] = useState(0.0020);
+  const [groupPull, setGroupPull] = useState(0.006);
   const [groupSpread, setGroupSpread] = useState(280);
   const [groupColors, setGroupColors] = useState<Record<string, string>>({});
   const [selectedGroup, setSelectedGroup] = useState('root');
   const [showSettings, setShowSettings] = useState(false);
-  const [edgeOpacity, setEdgeOpacity] = useState(0.5);
+  const [edgeOpacity, setEdgeOpacity] = useState(0.65);
 
   useEffect(() => {
     try {
@@ -102,7 +102,7 @@ export function GraphView() {
     nodesRef.current = state.notes.map((n) => ({
       group: deriveGroup(n),
       id: n.id, title: n.title,
-      x: cx, y: cy, // Start at center for animation
+      x: cx, y: cy,
       vx: 0, vy: 0,
       conns: links[n.id]?.size || 0,
     }));
@@ -121,8 +121,6 @@ export function GraphView() {
     });
 
     setGraphStats({ nodes: nodesRef.current.length, edges: edgesRef.current.length });
-    
-    // Trigger burst animation on build
     setTimeout(() => animate(), 50);
   }, [state.notes, state.folders, groupSpread]);
 
@@ -180,14 +178,14 @@ export function GraphView() {
       const cx = sizeRef.current.w / 2;
       const cy = sizeRef.current.h / 2;
 
-      // Repulsion
+      // Strong Repulsion to prevent overlap
       for (let i = 0; i < nodes.length; i++) {
         for (let j = i + 1; j < nodes.length; j++) {
           const dx = nodes[j].x - nodes[i].x;
           const dy = nodes[j].y - nodes[i].y;
           const d = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
           const sameGroup = nodes[i].group === nodes[j].group;
-          const f = (sameGroup ? 4000 : 6000) / (d * d);
+          const f = (sameGroup ? 8000 : 14000) / (d * d);
           const fx = (dx / d) * f;
           const fy = (dy / d) * f;
           nodes[i].vx -= fx; nodes[i].vy -= fy;
@@ -229,7 +227,7 @@ export function GraphView() {
         n.vx *= 0.82;
         n.vy *= 0.82;
         const speed = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
-        if (speed > 15) { n.vx = (n.vx / speed) * 15; n.vy = (n.vy / speed) * 15; }
+        if (speed > 18) { n.vx = (n.vx / speed) * 18; n.vy = (n.vy / speed) * 18; }
         n.x += n.vx; n.y += n.vy;
       }
     }
@@ -278,7 +276,6 @@ export function GraphView() {
       const queryLower = filterQuery.toLowerCase();
       const matchesFilter = (n: GNode) => !queryLower || n.title.toLowerCase().includes(queryLower);
 
-      // Precompute neighbors of selected node for blue highlighting
       const selectedNeighbors = new Set<string>();
       if (selectedRef.current) {
         for (const e of edges) {
@@ -303,13 +300,13 @@ export function GraphView() {
 
         ctx!.beginPath();
         if (isConnectedToSelected) {
-          ctx!.strokeStyle = `rgba(70, 140, 240, ${Math.min(1, edgeOpacity + 0.4)})`;
+          ctx!.strokeStyle = `rgba(70, 140, 240, ${Math.min(1, edgeOpacity + 0.3)})`;
           ctx!.lineWidth = 1.8;
         } else if (isHovered) {
           ctx!.strokeStyle = `rgba(180, 200, 225, ${edgeOpacity})`;
           ctx!.lineWidth = 1.2;
         } else {
-          ctx!.strokeStyle = `rgba(140, 156, 180, ${edgeOpacity * 0.6})`;
+          ctx!.strokeStyle = `rgba(140, 156, 180, ${edgeOpacity * 0.7})`;
           ctx!.lineWidth = 0.8;
         }
         ctx!.moveTo(a.x, a.y);
@@ -322,15 +319,13 @@ export function GraphView() {
         if (visibleIds && !visibleIds.has(n.id)) continue;
         if (queryLower && !matchesFilter(n) && n.conns === 0) continue;
 
-        // Size: 5mm base + 1mm for every 6 connections
-        const r = (5 + Math.floor(n.conns / 6)) * nodeScale;
+        const r = (2.5 + Math.floor(n.conns / 6) * 0.5) * nodeScale;
         const isSelected = n.id === selectedRef.current;
         const isNeighbor = selectedNeighbors.has(n.id);
         const isHovered = n.id === hoverRef.current;
         const dimmed = queryLower && !matchesFilter(n);
         const groupColor = groupColors[n.group];
 
-        // Selection Glow
         if (isSelected) {
           ctx!.beginPath();
           ctx!.arc(n.x, n.y, r + 8, 0, Math.PI * 2);
@@ -365,12 +360,10 @@ export function GraphView() {
           ctx!.fill();
           ctx!.globalAlpha = 1;
         } else {
-          // Default uniform look (no default shine)
           ctx!.fillStyle = 'rgba(180, 190, 205, 0.85)';
           ctx!.fill();
         }
 
-        // Labels
         if (!dimmed && (showAllLabels || isHovered || isSelected || isNeighbor)) {
           ctx!.fillStyle = isSelected || isNeighbor ? theme.text : theme.textSecondary;
           ctx!.font = `${isSelected ? 'bold 11' : '10'}px -apple-system, system-ui, sans-serif`;
@@ -391,7 +384,7 @@ export function GraphView() {
     const z = zoomRef.current; const p = panRef.current;
     const wx = (mx - p.x) / z; const wy = (my - p.y) / z;
     for (const n of [...nodesRef.current].reverse()) {
-      const r = ((5 + Math.floor(n.conns / 6)) * nodeScale) + 12;
+      const r = ((2.5 + Math.floor(n.conns / 6) * 0.5) * nodeScale) + 12;
       if ((wx - n.x) ** 2 + (wy - n.y) ** 2 < r * r) return n;
     }
     return null;
@@ -452,7 +445,7 @@ export function GraphView() {
       selectedRef.current = n.id;
       dispatch({ type: 'OPEN_TAB', payload: n.id });
     } else {
-      selectedRef.current = null; // Deselect if clicking empty space
+      selectedRef.current = null;
     }
   };
 
@@ -474,10 +467,10 @@ export function GraphView() {
     nodesRef.current.forEach((n, i) => {
       setTimeout(() => {
         const angle = (i / nodesRef.current.length) * Math.PI * 2;
-        const speed = 6 + n.conns * 1.5;
+        const speed = 3 + n.conns * 0.8; // Smoother, slower burst
         n.vx = Math.cos(angle) * speed;
         n.vy = Math.sin(angle) * speed;
-      }, i * 15);
+      }, i * 8); // Faster stagger for fluid bloom effect
     });
   };
 
@@ -558,28 +551,28 @@ export function GraphView() {
 
           <div style={{ marginBottom: 12 }}>
             <div style={labelStyle}><span>Node Scale</span> <span>{nodeScale.toFixed(1)}</span></div>
-            <input type="range" min={0.5} max={2.5} step={0.1} value={nodeScale}
+            <input type="range" min={0.5} max={4.0} step={0.1} value={nodeScale}
               onChange={e => setNodeScale(parseFloat(e.target.value))}
               style={inputStyle} />
           </div>
 
           <div style={{ marginBottom: 12 }}>
             <div style={labelStyle}><span>Link Distance</span> <span>{linkDistance}px</span></div>
-            <input type="range" min={90} max={320} step={5} value={linkDistance}
+            <input type="range" min={100} max={600} step={10} value={linkDistance}
               onChange={e => setLinkDistance(parseInt(e.target.value))}
               style={inputStyle} />
           </div>
 
           <div style={{ marginBottom: 12 }}>
             <div style={labelStyle}><span>Center Gravity</span> <span>{centerForce.toFixed(4)}</span></div>
-            <input type="range" min={0.0001} max={0.002} step={0.0001} value={centerForce}
+            <input type="range" min={0.0005} max={0.0050} step={0.0001} value={centerForce}
               onChange={e => setCenterForce(parseFloat(e.target.value))}
               style={inputStyle} />
           </div>
 
           <div style={{ marginBottom: 12 }}>
             <div style={labelStyle}><span>Group Pull</span> <span>{groupPull.toFixed(3)}</span></div>
-            <input type="range" min={0.001} max={0.01} step={0.001} value={groupPull}
+            <input type="range" min={0.001} max={0.015} step={0.001} value={groupPull}
               onChange={e => setGroupPull(parseFloat(e.target.value))}
               style={inputStyle} />
           </div>
@@ -651,21 +644,6 @@ export function GraphView() {
             {btn.icon}
           </button>
         ))}
-      </div>
-
-      {/* Legend */}
-      <div style={{ position: 'absolute', bottom: 16, left: 16, background: 'color-mix(in srgb, var(--bg-surface) 92%, transparent)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', fontSize: 9, color: 'var(--text-dim)', zIndex: 10, backdropFilter: 'blur(4px)' }}>
-        <div style={{ marginBottom: 4, fontWeight: 600, color: 'var(--text-secondary)' }}>Legend</div>
-        <div className="flex items-center gap-2" style={{ marginBottom: 2 }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#4a90e2' }} /> Selected
-        </div>
-        <div className="flex items-center gap-2" style={{ marginBottom: 2 }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'rgba(120,170,230,0.9)' }} /> Connected
-        </div>
-        <div className="flex items-center gap-2" style={{ marginBottom: 2 }}>
-          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(180,190,205,0.85)' }} /> Default
-        </div>
-        <div style={{ marginTop: 4, color: 'var(--text-dim)' }}>Scroll to zoom · Drag to pan</div>
       </div>
     </div>
   );
