@@ -34,7 +34,7 @@ cd flint
 bash install.sh
 ```
 > [!IMPORTANT]  
-> - Make sure that you installed all the required libraries like Flask, requests, and llama-cpp so that the agent can work, and launch it from the terminal for the agent to start and use, and launch it from the app menu if you only want a GUI for the non-taking. 
+> - Make sure that you installed all the required libraries like Flask, requests, and llama-cpp so that the agent can work, and launch it from the terminal for the agent to start and use, and launch it from the app menu if you only want a GUI for the note-taking. 
 
 ---
 
