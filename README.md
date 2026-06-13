@@ -55,11 +55,11 @@ bash install.sh
 - Zoom, pan, search, depth filter
 - Curved edges between connected notes
 
-### AI Agent (Python + Ollama + GGUF + APIs)
-- **Real Python backend** that connects to Ollama locally
+### AI Agent (`Ollama` + `GGUF` + `APIs`)
+- **Real Python backend** that connects to Ollama locally (*if you lunch from terminal*)
 - **Notes = Memory** - AI reads all your notes and graph connections
 - **Internet access** - AI searches Wikipedia for real-time info
-- **Works with ANY Ollama model** - llama3.2, mistral, codellama, phi3, etc.
+- **Works with ANY Ollama model** (which have tool calling support) - llama3.2, mistral, codellama, phi3, etc.
 - **Streaming responses** in real-time
 - **Browser fallback** when agent is not running
 
