@@ -3,7 +3,7 @@
 <img src="public/flint-logo.png" style="width: 15%; height: auto;"> 
 <br>
 
-![Flint](https://img.shields.io/badge/version-2.0.2-amber?style=flat-square)
+![Flint](https://img.shields.io/badge/version-2.0.2.6-amber?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue?style=flat-square)
 
