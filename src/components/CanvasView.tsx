@@ -87,9 +87,45 @@ function nearestSide(
   return best;
 }
 
-function bezierPath(x1: number, y1: number, x2: number, y2: number) {
-  const dx = Math.abs(x2 - x1) * 0.5 + 30;
-  return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+// Smart Bezier that exits properly based on card side (Obsidian style)
+function getControlPt(pt: { x: number; y: number }, side: 'top' | 'right' | 'bottom' | 'left', offset: number) {
+  switch (side) {
+    case 'top': return { x: pt.x, y: pt.y - offset };
+    case 'bottom': return { x: pt.x, y: pt.y + offset };
+    case 'left': return { x: pt.x - offset, y: pt.y };
+    case 'right': return { x: pt.x + offset, y: pt.y };
+  }
+}
+
+function smartBezier(
+  p1: { x: number; y: number }, s1: 'top' | 'right' | 'bottom' | 'left',
+  p2: { x: number; y: number }, s2: 'top' | 'right' | 'bottom' | 'left'
+) {
+  const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+  const offset = Math.min(dist * 0.5, 80); // Dynamic offset for smooth curves
+  const c1 = getControlPt(p1, s1, offset);
+  const c2 = getControlPt(p2, s2, offset);
+  return `M ${p1.x} ${p1.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${p2.x} ${p2.y}`;
+}
+
+function getBestSides(from: CanvasCard, to: CanvasCard) {
+  const sides: Array<'top' | 'right' | 'bottom' | 'left'> = ['top', 'right', 'bottom', 'left'];
+  let bestDist = Infinity;
+  let bestFrom: 'top' | 'right' | 'bottom' | 'left' = 'right';
+  let bestTo: 'top' | 'right' | 'bottom' | 'left' = 'left';
+  for (const sf of sides) {
+    const pf = getSidePt(from, sf);
+    for (const st of sides) {
+      const pt = getSidePt(to, st);
+      const d = Math.hypot(pf.x - pt.x, pf.y - pt.y);
+      if (d < bestDist) {
+        bestDist = d;
+        bestFrom = sf;
+        bestTo = st;
+      }
+    }
+  }
+  return { fromSide: bestFrom, toSide: bestTo };
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -100,6 +136,7 @@ export function CanvasView() {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null);
+  const resizeRef = useRef<{ id: string; startX: number; startY: number; startW: number; startH: number } | null>(null);
   const canvasDragRef = useRef<{ x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -117,7 +154,10 @@ export function CanvasView() {
     my: number;
   } | null>(null);
 
-  // Card color picker open state
+  // Interaction states
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+  const [hoveredConn, setHoveredConn] = useState<string | null>(null);
+  const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null);
 
   // Connections stored in localStorage
@@ -201,12 +241,13 @@ export function CanvasView() {
       id: `text-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       type: 'text',
       content: '',
-      x: Math.round((400 - pan.x) / zoom),
-      y: Math.round((300 - pan.y) / zoom),
+      x: Math.round(((window.innerWidth / 2 - pan.x) / zoom) / 20) * 20,
+      y: Math.round(((window.innerHeight / 2 - pan.y) / zoom) / 20) * 20,
       w: 240,
-      h: 150,
+      h: 160,
     };
     updateCards([...cards, newCard]);
+    setSelectedCard(newCard.id);
   };
 
   const deleteCard = (id: string) => {
@@ -214,19 +255,54 @@ export function CanvasView() {
     setConnections(prev => prev.filter(c => c.fromCard !== id && c.toCard !== id));
     setCardColors(prev => { const n = { ...prev }; delete n[id]; return n; });
     if (colorPickerOpen === id) setColorPickerOpen(null);
+    if (selectedCard === id) setSelectedCard(null);
   };
 
   const deleteConnection = (id: string) => {
     setConnections(prev => prev.filter(c => c.id !== id));
+    if (hoveredConn === id) setHoveredConn(null);
   };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (connDragRef.current) {
+          connDragRef.current = null;
+          setConnDrag(null);
+        }
+        setSelectedCard(null);
+        setColorPickerOpen(null);
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCard) {
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        deleteCard(selectedCard);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedCard]);
 
   // ── Mouse handlers ────────────────────────────────────────────────────────
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (dragRef.current) {
+      const rawX = (e.clientX - pan.x - dragRef.current.offsetX) / zoom;
+      const rawY = (e.clientY - pan.y - dragRef.current.offsetY) / zoom;
+      // Snap to 20px grid
       updateCard(dragRef.current.id, {
-        x: Math.round((e.clientX - pan.x - dragRef.current.offsetX) / zoom),
-        y: Math.round((e.clientY - pan.y - dragRef.current.offsetY) / zoom),
+        x: Math.round(rawX / 20) * 20,
+        y: Math.round(rawY / 20) * 20,
+      });
+    } else if (resizeRef.current) {
+      const dx = (e.clientX - resizeRef.current.startX) / zoom;
+      const dy = (e.clientY - resizeRef.current.startY) / zoom;
+      const newW = Math.round((resizeRef.current.startW + dx) / 20) * 20;
+      const newH = Math.round((resizeRef.current.startH + dy) / 20) * 20;
+      updateCard(resizeRef.current.id, {
+        w: Math.max(160, newW),
+        h: Math.max(80, newH)
       });
     } else if (canvasDragRef.current) {
       setPan({
@@ -273,6 +349,7 @@ export function CanvasView() {
     }
 
     dragRef.current = null;
+    resizeRef.current = null;
     canvasDragRef.current = null;
     connDragRef.current = null;
     setConnDrag(null);
@@ -282,6 +359,7 @@ export function CanvasView() {
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget) return;
     setColorPickerOpen(null);
+    setSelectedCard(null);
     canvasDragRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
     if (containerRef.current) containerRef.current.style.cursor = 'grabbing';
   };
@@ -334,17 +412,18 @@ export function CanvasView() {
       const from = findCard(edge.from);
       const to = findCard(edge.to);
       if (!from || !to) return;
-      const p1 = getSidePt(from, 'right');
-      const p2 = getSidePt(to, 'left');
+      const { fromSide, toSide } = getBestSides(from, to);
+      const p1 = getSidePt(from, fromSide);
+      const p2 = getSidePt(to, toSide);
       allEdges.push(
         <g key={`wiki-${edge.from}-${edge.to}`}>
           <path
-            d={bezierPath(p1.x, p1.y, p2.x, p2.y)}
+            d={smartBezier(p1, fromSide, p2, toSide)}
             stroke="#4a4a4a"
             strokeWidth={1.2 / zoom}
             strokeDasharray={`${4 / zoom} ${4 / zoom}`}
             fill="none"
-            markerEnd="url(#arrow-dim)"
+            style={{ pointerEvents: 'none' }}
           />
         </g>
       );
@@ -363,39 +442,43 @@ export function CanvasView() {
       allEdges.push(
         <g key={conn.id}>
           <path
-            d={bezierPath(p1.x, p1.y, p2.x, p2.y)}
+            d={smartBezier(p1, conn.fromSide, p2, conn.toSide)}
             stroke="transparent"
             strokeWidth={14 / zoom}
             fill="none"
-            style={{ cursor: 'pointer' }}
+            style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
             onClick={() => deleteConnection(conn.id)}
+            onMouseEnter={() => setHoveredConn(conn.id)}
+            onMouseLeave={() => setHoveredConn(null)}
           />
           <path
-            d={bezierPath(p1.x, p1.y, p2.x, p2.y)}
+            d={smartBezier(p1, conn.fromSide, p2, conn.toSide)}
             stroke={color}
-            strokeWidth={1.8 / zoom}
+            strokeWidth={hoveredConn === conn.id ? 2.5 / zoom : 1.8 / zoom}
             fill="none"
             strokeOpacity={0.8}
             markerEnd={`url(#arrow-colored-${conn.id})`}
             style={{ pointerEvents: 'none' }}
           />
-          <g
-            transform={`translate(${midX}, ${midY})`}
-            style={{ cursor: 'pointer' }}
-            onClick={() => deleteConnection(conn.id)}
-          >
-            <circle r={8 / zoom} fill="#1c1c1c" stroke={color} strokeWidth={1.2 / zoom} />
-            <text
-              x={0} y={1}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fontSize={9 / zoom}
-              fill={color}
-              style={{ userSelect: 'none', pointerEvents: 'none' }}
+          {hoveredConn === conn.id && (
+            <g
+              transform={`translate(${midX}, ${midY})`}
+              style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+              onClick={() => deleteConnection(conn.id)}
             >
-              ×
-            </text>
-          </g>
+              <circle r={8 / zoom} fill="#1c1c1c" stroke={color} strokeWidth={1.2 / zoom} />
+              <text
+                x={0} y={1}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontSize={9 / zoom}
+                fill={color}
+                style={{ userSelect: 'none', pointerEvents: 'none' }}
+              >
+                ×
+              </text>
+            </g>
+          )}
         </g>
       );
     });
@@ -418,61 +501,12 @@ export function CanvasView() {
         style={{
           position: 'absolute',
           inset: 0,
-          backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px)`,
-          backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
-          backgroundPosition: `${pan.x % (24 * zoom)}px ${pan.y % (24 * zoom)}px`,
+          backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px)`,
+          backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
+          backgroundPosition: `${pan.x % (20 * zoom)}px ${pan.y % (20 * zoom)}px`,
           pointerEvents: 'none',
         }}
       />
-
-      {/* SVG layer: connections + live drag line */}
-      <svg
-        style={{
-          position: 'absolute', inset: 0,
-          width: '100%', height: '100%',
-          pointerEvents: 'none',
-          overflow: 'visible',
-        }}
-      >
-        <defs>
-          <marker id="arrow-dim" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-            <path d="M0,0 L0,7 L7,3.5 z" fill="#4a4a4a" />
-          </marker>
-          {connections.map(conn => (
-            <marker
-              key={conn.id}
-              id={`arrow-colored-${conn.id}`}
-              markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"
-            >
-              <path d="M0,0 L0,7 L7,3.5 z" fill={conn.color || accentColor} fillOpacity={0.8} />
-            </marker>
-          ))}
-          <marker id="arrow-live" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-            <path d="M0,0 L0,7 L7,3.5 z" fill={accentColor} fillOpacity={0.8} />
-          </marker>
-        </defs>
-
-        <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-          {renderConnections()}
-
-          {connDrag && (() => {
-            const fromCard = findCard(connDrag.fromCard);
-            if (!fromCard) return null;
-            const p1 = getSidePt(fromCard, connDrag.fromSide);
-            return (
-              <path
-                d={bezierPath(p1.x, p1.y, connDrag.mx, connDrag.my)}
-                stroke={accentColor}
-                strokeWidth={1.8 / zoom}
-                strokeDasharray={`${5 / zoom} ${3 / zoom}`}
-                fill="none"
-                strokeOpacity={0.7}
-                markerEnd="url(#arrow-live)"
-              />
-            );
-          })()}
-        </g>
-      </svg>
 
       {/* Canvas cards */}
       <div
@@ -480,6 +514,7 @@ export function CanvasView() {
           position: 'absolute', inset: 0,
           transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
           transformOrigin: '0 0',
+          zIndex: 1,
         }}
         onMouseDown={handleCanvasMouseDown}
       >
@@ -504,8 +539,10 @@ export function CanvasView() {
           const cardColor = CARD_COLORS[colorIdx];
           const isColorPickerOpen = colorPickerOpen === card.id;
 
-          const cardBorder = isActive
-            ? accentColor
+          const cardBorder = selectedCard === card.id 
+            ? accentColor 
+            : isActive 
+            ? accentColor 
             : colorIdx > 0 
             ? cardColor.border 
             : cardBorderDefault;
@@ -520,7 +557,7 @@ export function CanvasView() {
               height: 8 / zoom,
               zIndex: 5,
               cursor: 'crosshair',
-              opacity: 0,
+              opacity: hoveredCard === card.id ? 0.85 : 0,
               transition: 'opacity 0.15s ease, transform 0.15s ease',
               boxShadow: `0 0 4px rgba(127, 109, 242, 0.4)`,
             };
@@ -533,7 +570,6 @@ export function CanvasView() {
           return (
             <div
               key={card.id}
-              className="canvas-card-root"
               style={{
                 position: 'absolute',
                 left: card.x,
@@ -541,10 +577,10 @@ export function CanvasView() {
                 width: card.w,
                 minHeight: card.h,
                 background: isActive ? cardBgActive : cardBg,
-                border: `${1 / zoom}px solid ${cardBorder}`,
+                border: `${selectedCard === card.id ? 2 : 1}px solid ${cardBorder}`,
                 borderRadius: 8 / zoom,
-                boxShadow: isActive
-                  ? `0 0 0 1px rgba(127,109,242,0.2), 0 0 16px rgba(127,109,242,0.2), 0 8px 32px rgba(0,0,0,0.5)`
+                boxShadow: selectedCard === card.id
+                  ? `0 0 0 1px ${accentColor}40, 0 0 20px ${accentColor}20`
                   : cardColor.glow
                   ? `0 0 0 1px ${cardColor.glow}, 0 6px 20px rgba(0,0,0,0.4)`
                   : '0 6px 20px rgba(0,0,0,0.4)',
@@ -555,24 +591,23 @@ export function CanvasView() {
               }}
               onClick={e => {
                 e.stopPropagation();
+                setSelectedCard(card.id);
                 setColorPickerOpen(null);
               }}
+              onDoubleClick={() => {
+                if (isNote && card.noteId) dispatch({ type: 'OPEN_TAB', payload: card.noteId });
+              }}
+              onMouseEnter={() => setHoveredCard(card.id)}
+              onMouseLeave={() => setHoveredCard(null)}
             >
-              <style>{`
-                .canvas-card-root:hover .conn-dot { opacity: 0.85 !important; }
-                .conn-dot:hover { opacity: 1 !important; transform: scale(1.3) !important; background: #9f94f7 !important; }
-              `}</style>
-
               {SIDES.map(side => (
                 <div
                   key={side}
-                  className="conn-dot"
                   style={sideStyle(side)}
                   title={`Connect from ${side}`}
                   onMouseDown={e => {
                     e.stopPropagation();
                     e.preventDefault();
-                    const rect = containerRef.current!.getBoundingClientRect();
                     const fromCard = filteredCards.find(c => c.id === card.id)!;
                     const pt = getSidePt(fromCard, side);
                     connDragRef.current = { fromCard: card.id, fromSide: side, mx: pt.x, my: pt.y };
@@ -585,6 +620,7 @@ export function CanvasView() {
               <div
                 onMouseDown={e => {
                   e.stopPropagation();
+                  setSelectedCard(card.id);
                   dragRef.current = {
                     id: card.id,
                     offsetX: e.clientX - pan.x - card.x * zoom,
@@ -601,7 +637,6 @@ export function CanvasView() {
                   background: 'rgba(0,0,0,0.15)',
                   flexShrink: 0,
                   borderRadius: `${8 / zoom}px ${8 / zoom}px 0 0`,
-                  transition: 'background 0.15s ease',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 / zoom, minWidth: 0, flex: 1 }}>
@@ -614,7 +649,6 @@ export function CanvasView() {
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
-                    transition: 'color 0.15s ease',
                   }}>
                     {titleLine}
                   </span>
@@ -631,16 +665,12 @@ export function CanvasView() {
                     style={{
                       background: 'none', border: 'none', cursor: 'pointer',
                       padding: `${2 / zoom}px`, display: 'flex', borderRadius: 3 / zoom,
-                      transition: 'background 0.15s ease',
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
                   >
                     <div style={{
                       width: 9 / zoom, height: 9 / zoom, borderRadius: '50%',
                       background: colorIdx > 0 ? cardColor.border : 'rgba(255,255,255,0.25)',
                       border: `${1 / zoom}px solid rgba(255,255,255,0.15)`,
-                      transition: 'background 0.15s ease',
                     }} />
                   </button>
 
@@ -656,16 +686,9 @@ export function CanvasView() {
                         background: 'none', border: 'none',
                         color: textMuted, cursor: 'pointer',
                         padding: `${2 / zoom}px`, display: 'flex', borderRadius: 3 / zoom,
-                        transition: 'color 0.15s ease, background 0.15s ease',
                       }}
-                      onMouseEnter={e => {
-                        e.currentTarget.style.color = textPrimary;
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
-                      }}
-                      onMouseLeave={e => {
-                        e.currentTarget.style.color = textMuted;
-                        e.currentTarget.style.background = 'none';
-                      }}
+                      onMouseEnter={e => e.currentTarget.style.color = textPrimary}
+                      onMouseLeave={e => e.currentTarget.style.color = textMuted}
                     >
                       <Plus size={10 / zoom} />
                     </button>
@@ -678,16 +701,9 @@ export function CanvasView() {
                       background: 'none', border: 'none',
                       color: textMuted, cursor: 'pointer',
                       padding: `${2 / zoom}px`, display: 'flex', borderRadius: 3 / zoom,
-                      transition: 'color 0.15s ease, background 0.15s ease',
                     }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.color = '#e5555a';
-                      e.currentTarget.style.background = 'rgba(229,85,90,0.1)';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.color = textMuted;
-                      e.currentTarget.style.background = 'none';
-                    }}
+                    onMouseEnter={e => e.currentTarget.style.color = '#e5555a'}
+                    onMouseLeave={e => e.currentTarget.style.color = textMuted}
                   >
                     <Trash2 size={10 / zoom} />
                   </button>
@@ -729,11 +745,8 @@ export function CanvasView() {
                         border: colorIdx === idx
                           ? `${2 / zoom}px solid ${textPrimary}`
                           : `${1 / zoom}px solid rgba(255,255,255,0.1)`,
-                        transition: 'transform 0.15s ease, border-color 0.15s ease',
                         boxShadow: colorIdx === idx ? `0 0 8px ${col.border}` : 'none',
                       }}
-                      onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.2)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
                     />
                   ))}
                 </div>
@@ -784,10 +797,93 @@ export function CanvasView() {
                   />
                 )}
               </div>
+
+              {/* Resize handle */}
+              <div
+                onMouseDown={e => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  resizeRef.current = {
+                    id: card.id,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    startW: card.w,
+                    startH: card.h
+                  };
+                }}
+                style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  right: 0,
+                  width: 16 / zoom,
+                  height: 16 / zoom,
+                  cursor: 'nwse-resize',
+                  zIndex: 10,
+                  opacity: hoveredCard === card.id ? 0.6 : 0,
+                  transition: 'opacity 0.15s ease',
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                  justifyContent: 'flex-end',
+                  padding: 2 / zoom,
+                }}
+              >
+                <svg width={8 / zoom} height={8 / zoom} viewBox="0 0 10 10">
+                  <path d="M9 1L1 9M9 5L5 9" stroke={textMuted} strokeWidth="1.5" fill="none" />
+                </svg>
+              </div>
             </div>
           );
         })}
       </div>
+
+      {/* SVG layer: connections + live drag line */}
+      <svg
+        style={{
+          position: 'absolute', inset: 0,
+          width: '100%', height: '100%',
+          pointerEvents: 'none',
+          overflow: 'visible',
+          zIndex: 2, // Above cards to allow clickable connection hitboxes
+        }}
+      >
+        <defs>
+          <marker id="arrow-dim" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M0,0 L0,7 L7,3.5 z" fill="#4a4a4a" />
+          </marker>
+          {connections.map(conn => (
+            <marker
+              key={conn.id}
+              id={`arrow-colored-${conn.id}`}
+              markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"
+            >
+              <path d="M0,0 L0,7 L7,3.5 z" fill={conn.color || accentColor} fillOpacity={0.8} />
+            </marker>
+          ))}
+        </defs>
+
+        <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
+          {renderConnections()}
+
+          {connDrag && (() => {
+            const fromCard = findCard(connDrag.fromCard);
+            if (!fromCard) return null;
+            const p1 = getSidePt(fromCard, connDrag.fromSide);
+            const c1 = getControlPt(p1, connDrag.fromSide, 50);
+            const p2 = { x: connDrag.mx, y: connDrag.my };
+            return (
+              <path
+                d={`M ${p1.x} ${p1.y} C ${c1.x} ${c1.y}, ${p2.x} ${p2.y}, ${p2.x} ${p2.y}`}
+                stroke={accentColor}
+                strokeWidth={1.8 / zoom}
+                strokeDasharray={`${5 / zoom} ${3 / zoom}`}
+                fill="none"
+                strokeOpacity={0.7}
+                style={{ pointerEvents: 'none' }}
+              />
+            );
+          })()}
+        </g>
+      </svg>
 
       {/* Header toolbar */}
       <div
@@ -855,7 +951,6 @@ export function CanvasView() {
             background: 'rgba(255,255,255,0.03)',
             border: `1px solid #2b2b2b`,
             borderRadius: 6,
-            transition: 'border-color 0.15s ease',
           }}>
             <Search size={11} style={{ color: textMuted }} />
             <input
@@ -871,7 +966,7 @@ export function CanvasView() {
             {query && (
               <button
                 onClick={() => setQuery('')}
-                style={{ background: 'none', border: 'none', color: textMuted, cursor: 'pointer', padding: 0, display: 'flex', transition: 'color 0.15s ease' }}
+                style={{ background: 'none', border: 'none', color: textMuted, cursor: 'pointer', padding: 0, display: 'flex' }}
                 onMouseEnter={e => e.currentTarget.style.color = textPrimary}
                 onMouseLeave={e => e.currentTarget.style.color = textMuted}
               >
@@ -896,7 +991,6 @@ export function CanvasView() {
               background: 'none', border: 'none',
               color: textMuted, cursor: 'pointer',
               display: 'flex', alignItems: 'center', fontSize: 11, padding: '4px 6px', borderRadius: 4,
-              transition: 'color 0.15s ease, background 0.15s ease',
             }}
             onMouseEnter={e => {
               e.currentTarget.style.color = textPrimary;
@@ -917,7 +1011,6 @@ export function CanvasView() {
               background: 'none', border: 'none',
               color: textMuted, cursor: 'pointer',
               display: 'flex', padding: 4, borderRadius: 4,
-              transition: 'color 0.15s ease, background 0.15s ease',
             }}
             onMouseEnter={e => {
               e.currentTarget.style.color = textPrimary;
@@ -939,7 +1032,7 @@ export function CanvasView() {
         transform: 'translateX(-50%)',
         fontSize: 10, color: '#444444',
         display: 'flex', gap: 10,
-        pointerEvents: 'none', whiteSpace: 'nowrap',
+        pointerEvents: 'none', whiteSpace: 'nowrap', zIndex: 5,
       }}>
         <span>Scroll to pan</span>
         <span>·</span>
@@ -948,6 +1041,8 @@ export function CanvasView() {
         <span>Drag header to move</span>
         <span>·</span>
         <span>Hover card edge to connect</span>
+        <span>·</span>
+        <span>Press ESC to cancel select/drag</span>
       </div>
     </div>
   );
