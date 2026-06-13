@@ -70,11 +70,8 @@ bash install.sh
 - **No external API calls** (except Wikipedia when internet access is enabled)
 - **File System Access API** to open any local folder as a vault
 
->[!important]
+>[!note]
 > - This project needs developer support across a community, and this project may contain bugs and glitches, so if you notice something, please make an issue and feel free to make a PR for that.
-> - This project is inspired by [Obsidian](https://obsidian.md/), and I just want to create an open-source UI that gives a feel like Obsidian, and I try to make it and add some
-other features that may help the community, and that's it.
-> - So for your daily usage you can prefer [Obsidian](https://github.com/obsidianmd) and go with it. This project is for those who want a UI of Obsidian for their projects or for     some other reasons and also for those who only use open-source and all-time trusted tools and items. 
 
 ## Star History
 
