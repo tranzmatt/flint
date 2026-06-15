@@ -3,8 +3,8 @@ dist/
 .DS_Store
 *.local
 *.log
-scripts/
 dist_electron/
-electron/bin
+electron/bin/
+agent/build/
+agent/agent.spec
 build/
-agent.spec
