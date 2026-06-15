@@ -56,7 +56,7 @@ bash install.sh
 - Zoom, pan, search, depth filter
 - Curved edges between connected notes
 
-### AI Agent (`Ollama` + `GGUF` + `APIs`)
+### AI Agent (`Ollama`)
 - **Real Python backend** that connects to Ollama locally (*if you lunch from terminal*)
 - **Notes = Memory** - AI reads all your notes and graph connections
 - **Internet access** - AI searches Wikipedia for real-time info
@@ -69,6 +69,12 @@ bash install.sh
 - **localStorage** for persistence
 - **No external API calls** (except Wikipedia when internet access is enabled)
 - **File System Access API** to open any local folder as a vault
+
+## Aim
+
+- [ ] Local hosted models use the internet and give you answers (if you ask)
+- [ ] A flint agent can change the content in your notes by itself.
+- [ ] Flint can manage all notes and can do tasks in that working space as per your command. 
 
 >[!note]
 > - This project needs developer support across a community, and this project may contain bugs and glitches, so if you notice something, please make an issue and feel free to make a PR for that.
