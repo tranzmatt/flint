@@ -820,8 +820,8 @@ export function CanvasView() {
               viewBox="0 0 10 10"
               refX="0"
               refY="5"
-              markerWidth={8 / zoom}
-              markerHeight={8 / zoom}
+              markerWidth={8}
+              markerHeight={8}
               orient="auto-start-reverse"
             >
               <path d="M 0 1 L 10 5 L 0 9 Z" fill={color} fillOpacity={0.85} />
@@ -832,8 +832,8 @@ export function CanvasView() {
             viewBox="0 0 10 10"
             refX="0"
             refY="5"
-            markerWidth={8 / zoom}
-            markerHeight={8 / zoom}
+            markerWidth={8}
+            markerHeight={8}
             orient="auto-start-reverse"
           >
             <path d="M 0 1 L 10 5 L 0 9 Z" fill={accentColor} fillOpacity={0.7} />
