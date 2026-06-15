@@ -7,8 +7,8 @@ import type { Note, AIAction, AISettings } from '../types';
 // 3. Browser built-in → note search only
 // ============================================================
 
-const AGENT_URL = 'http://localhost:5100';
-const DEFAULT_OLLAMA = 'http://localhost:11434';
+const AGENT_URL = 'http://127.0.0.1:5100';
+const DEFAULT_OLLAMA = 'http://127.0.0.1:11434';
 
 function deriveLocalModelAlias(settings: AISettings): string {
   if (settings.model.trim()) return settings.model.trim();
@@ -215,7 +215,7 @@ export async function askFlintAI(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       }),
-      timeout(8000),
+      timeout(120000),
     ]) as Response;
 
     if (!response.ok) throw new Error(`Agent error ${response.status}`);
@@ -297,7 +297,7 @@ export async function askFlintAI(
             options: { temperature: settings.temperature, num_ctx: 8192 },
           }),
         }),
-        timeout(10000),
+        timeout(120000),
       ]) as Response;
 
       if (!response.ok) {

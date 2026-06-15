@@ -14,7 +14,7 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app, origins="*")
 
-OLLAMA_URL = "http://localhost:11434"
+OLLAMA_URL = "http://127.0.0.1:11434"
 AGENT_PORT = 5100
 
 try:
@@ -60,69 +60,8 @@ def get_models():
         return jsonify({"models": []})
 
 
-# ── Web Search ────────────────────────────────────────────────
-
-def web_search(query, max_results=3):
-    """Search Wikipedia for real-time information"""
-    results = []
-    try:
-        r = requests.get(
-            "https://en.wikipedia.org/w/api.php",
-            params={
-                "action": "opensearch",
-                "search": query,
-                "limit": max_results,
-                "format": "json",
-                "origin": "*",
-            },
-            timeout=5,
-        )
-        if r.ok:
-            data = r.json()
-            if data and len(data) >= 4:
-                for i in range(len(data[1])):
-                    title = data[1][i]
-                    snippet = data[2][i] if i < len(data[2]) else ""
-                    url = data[3][i] if i < len(data[3]) else ""
-                    if snippet:
-                        results.append({"title": title, "snippet": snippet, "url": url})
-    except Exception:
-        pass
-
-    # Get summaries for top results
-    detailed = []
-    for r_item in results[:3]:
-        try:
-            sr = requests.get(
-                f"https://en.wikipedia.org/api/rest_v1/page/summary/{requests.utils.quote(r_item['title'])}",
-                timeout=5,
-            )
-            if sr.ok:
-                sdata = sr.json()
-                extract = sdata.get("extract", "")
-                if extract:
-                    detailed.append(f"**{r_item['title']}**: {extract}")
-        except Exception:
-            if r_item["snippet"]:
-                detailed.append(f"**{r_item['title']}**: {r_item['snippet']}")
-
-    if detailed:
-        return f"=== WEB SEARCH RESULTS for \"{query}\" ===\n\n" + "\n\n".join(detailed) + "\n\n=== END WEB RESULTS ==="
-    return ""
-
-
-def needs_internet(query):
-    """Check if query likely needs internet access"""
-    q = query.lower()
-    keywords = [
-        "what is", "who is", "when was", "where is", "how does",
-        "latest", "recent", "current", "today", "news", "weather",
-        "explain", "define", "meaning of", "tell me about",
-        "compare", "difference between", "vs", "versus",
-        "search", "look up", "find out", "internet", "web",
-        "how to", "tutorial", "guide", "learn",
-    ]
-    return any(kw in q for kw in keywords)
+# ── Offline Enforcement ───────────────────────────────────────
+# Internet access is strictly disabled for privacy and vault-only context.
 
 
 def is_note_edit_request(query):
@@ -192,21 +131,10 @@ def concise_note_reply(notes, query, active_note_id, memory, max_notes=5):
     return "Relevant notes: " + ", ".join(top_titles) + "."
 
 
-def build_concise_system_prompt(system_prompt, memory, web_results=""):
-    prompt = (
-        f"{system_prompt}\n\n"
-        f"Answer briefly and clearly. Keep responses short, specific, and useful. "
-        f"Do not print whole notes unless the user explicitly asks for them. "
-        f"Prefer 1 short paragraph or up to 4 bullets.\n\n"
-        f"{memory}"
-    )
-    if web_results:
-        prompt += (
-            f"\n\n=== INTERNET ACCESS ===\n"
-            f"Use these web results only if needed:\n{web_results}\n"
-            f"Cite them briefly and do not copy long excerpts."
-        )
-    return prompt
+def build_concise_system_prompt(system_prompt, memory):
+    if memory and memory != "No relevant notes found.":
+        return f"User's Note Context:\n{memory}\n\nPlease answer the user's question. Use the notes if relevant, but provide general knowledge if the notes do not contain the answer."
+    return "Please answer the user's question clearly and concisely."
 
 
 def build_edit_prompt(system_prompt, memory, query):
@@ -322,6 +250,49 @@ def call_gemini(api_key, model, system_content, history, query, temperature, max
 
     parts = candidates[0].get("content", {}).get("parts", [])
     text = "\n".join(part.get("text", "") for part in parts if isinstance(part, dict))
+    return text or ""
+
+
+def call_claude(api_key, model, system_content, history, query, temperature, max_tokens=180):
+    """Call Claude messages API."""
+    selected_model = model or "claude-3-haiku-20240307"
+    endpoint = "https://api.anthropic.com/v1/messages"
+
+    messages = []
+    for h in history[-10:]:
+        role = h.get("role", "user")
+        text = h.get("content", "")
+        if not text:
+            continue
+        messages.append({
+            "role": "assistant" if role == "assistant" else "user",
+            "content": text
+        })
+    messages.append({"role": "user", "content": query})
+
+    resp = requests.post(
+        endpoint,
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json"
+        },
+        json={
+            "model": selected_model,
+            "system": system_content,
+            "messages": messages,
+            "max_tokens": max(32, int(max_tokens)),
+            "temperature": temperature
+        },
+        timeout=120
+    )
+    if not resp.ok:
+        detail = resp.text[:500]
+        raise RuntimeError(f"Claude API error ({resp.status_code}): {detail}")
+
+    data = resp.json()
+    content_blocks = data.get("content", [])
+    text = "".join(b.get("text", "") for b in content_blocks if b.get("type") == "text")
     return text or ""
 
 
@@ -661,16 +632,10 @@ def chat():
     max_output_tokens = int(settings.get("maxOutputTokens", 180) or 180)
     temperature = settings.get("temperature", 0.7)
     max_context = settings.get("maxContextNotes", 10)
-    internet_access = settings.get("internetAccess", True)
     system_prompt = settings.get("systemPrompt", "You are Flint AI, a helpful assistant with access to the user's note vault.")
 
     # Build memory
     memory = build_memory(notes, active_note_id, query, max_context)
-
-    # Web search if needed
-    web_results = ""
-    if internet_access and needs_internet(query):
-        web_results = web_search(query)
 
     edit_request = is_note_edit_request(query)
 
@@ -679,19 +644,17 @@ def chat():
         response_text = concise_note_reply(notes, query, active_note_id, memory, max_context)
         if edit_request:
             response_text = "I can suggest note changes, but Ollama is not configured."
-        elif web_results:
-            response_text += f"\n\n*Web search was performed, but no local model is available.*"
 
         def stream_builtin():
             for i in range(0, len(response_text), 3):
                 chunk = response_text[i:i+3]
                 yield f"data: {json.dumps({'content': chunk})}\n\n"
-            yield f"data: {json.dumps({'done': True, 'webResults': web_results or None, 'usedOllama': False})}\n\n"
+            yield f"data: {json.dumps({'done': True, 'usedOllama': False})}\n\n"
 
         return Response(stream_builtin(), mimetype="text/event-stream")
 
     # Use Ollama / external provider
-    system_content = build_edit_prompt(system_prompt, memory, query) if edit_request else build_concise_system_prompt(system_prompt, memory, web_results)
+    system_content = build_edit_prompt(system_prompt, memory, query) if edit_request else build_concise_system_prompt(system_prompt, memory)
 
     active_note = None
     for n in notes:
@@ -720,7 +683,7 @@ def chat():
                 summary += f"\n\nApplied {len(actions)} change{'s' if len(actions) != 1 else ''}."
             for chunk in stream_text_chunks(summary, 3):
                 yield chunk
-            yield f"data: {json.dumps({'done': True, 'webResults': web_results or None, 'usedOllama': used_ollama, 'actions': actions})}\n\n"
+            yield f"data: {json.dumps({'done': True, 'usedOllama': used_ollama, 'actions': actions})}\n\n"
 
         try:
             if provider == "ollama":
@@ -758,6 +721,10 @@ def chat():
             if provider == "gemini":
                 text = call_gemini(api_key, model, system_content, history, query, min(temperature, 0.3), max_output_tokens)
                 return Response(stream_edit_plan(text, True), mimetype="text/event-stream")
+
+            if provider == "claude":
+                text = call_claude(api_key, model, system_content, history, query, min(temperature, 0.3), max_output_tokens)
+                return Response(stream_edit_plan(text, True), mimetype="text/event-stream")
         except Exception as e:
             fallback = concise_note_reply(notes, query, active_note_id, memory, max_context)
             fallback += f"\n\n*Unable to prepare note edits: {str(e)}*"
@@ -769,7 +736,7 @@ def chat():
 
             return Response(stream_edit_failure(), mimetype="text/event-stream")
 
-    if provider in ("openai", "openai-compatible", "gemini"):
+    if provider in ("openai", "openai-compatible", "gemini", "claude"):
         def stream_external():
             try:
                 if not api_key:
@@ -800,13 +767,23 @@ def chat():
                         temperature=temperature,
                         max_tokens=max_output_tokens,
                     )
+                elif provider == "claude":
+                    response_text = call_claude(
+                        api_key=api_key,
+                        model=model,
+                        system_content=system_content,
+                        history=history,
+                        query=query,
+                        temperature=temperature,
+                        max_tokens=max_output_tokens,
+                    )
                 else:
                     raise RuntimeError(f"Unsupported provider: {provider}")
 
                 concise_text = response_text.strip() or concise_note_reply(notes, query, active_note_id, memory, max_context)
                 for chunk in stream_text_chunks(concise_text):
                     yield chunk
-                yield f"data: {json.dumps({'done': True, 'webResults': web_results or None, 'usedOllama': True})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'usedOllama': True})}\n\n"
             except Exception as e:
                 fallback = concise_note_reply(notes, query, active_note_id, memory, max_context)
                 fallback += f"\n\n*Provider request failed: {str(e)}*"
@@ -830,7 +807,7 @@ def chat():
                 concise_text = response_text.strip() or concise_note_reply(notes, query, active_note_id, memory, max_context)
                 for chunk in stream_text_chunks(concise_text):
                     yield chunk
-                yield f"data: {json.dumps({'done': True, 'webResults': web_results or None, 'usedOllama': True})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'usedOllama': True})}\n\n"
             except Exception as e:
                 fallback = concise_note_reply(notes, query, active_note_id, memory, max_context)
                 fallback += f"\n\n*Local model error: {str(e)}*"
@@ -888,13 +865,13 @@ def chat():
                             full_content += content
                             yield f"data: {json.dumps({'content': content})}\n\n"
                         if chunk.get("done"):
-                            yield f"data: {json.dumps({'done': True, 'webResults': web_results or None, 'usedOllama': True})}\n\n"
+                            yield f"data: {json.dumps({'done': True, 'usedOllama': True})}\n\n"
                             return
                     except json.JSONDecodeError:
                         continue
 
             # Stream ended without done=True
-            yield f"data: {json.dumps({'done': True, 'webResults': web_results or None, 'usedOllama': True})}\n\n"
+            yield f"data: {json.dumps({'done': True, 'usedOllama': True})}\n\n"
 
         except requests.exceptions.ConnectionError:
             # Ollama not running — fall back to built-in
@@ -930,13 +907,13 @@ if __name__ == "__main__":
         r = requests.get(f"{OLLAMA_URL}/api/tags", timeout=3)
         if r.ok:
             models = [m["name"] for m in r.json().get("models", [])]
-            print(f"  ✓ Ollama connected — {len(models)} model(s) available")
+            print(f"  [OK] Ollama connected - {len(models)} model(s) available")
             for m in models:
                 print(f"    - {m}")
         else:
-            print("  ✗ Ollama not responding")
+            print("  [ERROR] Ollama not responding")
     except Exception:
-        print("  ✗ Ollama not running — built-in AI will be used")
+        print("  [ERROR] Ollama not running - built-in AI will be used")
         print("    Install Ollama: https://ollama.ai")
 
     print("=" * 50)
