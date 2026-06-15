@@ -12,9 +12,6 @@ NC='\033[0m'
 FLINT_DIR="$HOME/.flint"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-REPO_URL="https://github.com/Chintanpatel24/flint.git"
-BRANCH="main"
-
 echo ""
 echo -e "███████╗██╗     ██╗███╗   ██╗████████╗ "
 echo -e "██╔════╝██║     ██║████╗  ██║╚══██╔══╝ "
@@ -24,6 +21,7 @@ echo -e "██║     ███████╗██║██║ ╚███�
 echo -e "╚═╝     ╚══════╝╚═╝╚═╝  ╚═══╝   ╚═╝    "
 echo ""
 
+# Check if installed
 if [ ! -d "$FLINT_DIR/app" ]; then
     echo -e "${YELLOW}Flint is not installed. Run bash install.sh first.${NC}"
     exit 1
@@ -33,15 +31,10 @@ fi
 echo -e "${BLUE}[1/3]${NC} Checking for updates..."
 
 if [ -d "$SCRIPT_DIR/.git" ]; then
-    
-    git -C "$SCRIPT_DIR" remote set-url origin "$REPO_URL" 2>/dev/null || \
-    git -C "$SCRIPT_DIR" remote add origin "$REPO_URL" 2>/dev/null || true
-
+    # Git-based update
     OLD_COMMIT=$(git -C "$SCRIPT_DIR" rev-parse HEAD 2>/dev/null || echo "unknown")
-
-    git -C "$SCRIPT_DIR" fetch origin "$BRANCH" 2>/dev/null || true
-
-    NEW_COMMIT=$(git -C "$SCRIPT_DIR" rev-parse origin/"$BRANCH" 2>/dev/null || echo "$OLD_COMMIT")
+    git -C "$SCRIPT_DIR" fetch origin main 2>/dev/null || git -C "$SCRIPT_DIR" fetch origin 2>/dev/null || true
+    NEW_COMMIT=$(git -C "$SCRIPT_DIR" rev-parse origin/main 2>/dev/null || echo "$OLD_COMMIT")
 
     if [ "$OLD_COMMIT" = "$NEW_COMMIT" ]; then
         echo -e "      ${GREEN}App is up to date${NC}"
@@ -50,29 +43,13 @@ if [ -d "$SCRIPT_DIR/.git" ]; then
     fi
 
     echo -e "      ${DIM}Changes detected. Updating...${NC}"
-    git -C "$SCRIPT_DIR" pull origin "$BRANCH" 2>/dev/null || true
-
+    git -C "$SCRIPT_DIR" pull origin main 2>/dev/null || git -C "$SCRIPT_DIR" pull 2>/dev/null || true
 else
-   
-    echo -e "      ${DIM}No git folder found. Cloning from GitHub...${NC}"
-
-    TEMP_CLONE="$FLINT_DIR/.clone"
-    rm -rf "$TEMP_CLONE"
-
-    if ! git clone --depth=1 --branch "$BRANCH" "$REPO_URL" "$TEMP_CLONE"; then
-        echo -e "${RED}Failed to clone from GitHub. Check your internet connection.${NC}"
-        exit 1
-    fi
-
-   
-    rsync -a --exclude='.git' "$TEMP_CLONE/" "$SCRIPT_DIR/"
-
-    rm -rf "$TEMP_CLONE"
-
-    echo -e "      ${DIM}Source updated from GitHub.${NC}"
+    # Source directory update — just rebuild
+    echo -e "      ${DIM}Rebuilding from source directory...${NC}"
 fi
 
-
+# Rebuild
 echo -e "${BLUE}[2/3]${NC} Rebuilding..."
 
 BUILD_DIR="$FLINT_DIR/.build"
@@ -88,20 +65,15 @@ for item in "$SCRIPT_DIR"/*; do
 done
 
 cd "$BUILD_DIR"
-
-echo -e "      ${DIM}Installing dependencies...${NC}"
 npm install --loglevel=error 2>/dev/null || npm install
-
-echo -e "      ${DIM}Building app...${NC}"
 npm run build
 
 if [ ! -f "$BUILD_DIR/dist/index.html" ]; then
-    echo -e "${RED}Build failed! dist/index.html not found.${NC}"
+    echo -e "${RED}Build failed!${NC}"
     exit 1
 fi
 
 # Copy new dist
-echo -e "      ${DIM}Copying new build...${NC}"
 rm -rf "$FLINT_DIR/app/dist"
 cp -r "$BUILD_DIR/dist" "$FLINT_DIR/app/dist"
 
@@ -128,8 +100,6 @@ if [ -f "/tmp/flint-agent-$(id -u).pid" ]; then
     kill "$OLD_PID" 2>/dev/null || true
     rm -f "/tmp/flint-agent-$(id -u).pid"
     echo -e "      ${DIM}Agent stopped. It will restart with Flint.${NC}"
-else
-    echo -e "      ${DIM}No running agent found.${NC}"
 fi
 
 echo ""
