@@ -101,15 +101,15 @@ mkdir "%BUILD_DIR%" 2>nul
 
 :: Copy source files to build dir (exclude node_modules, dist, .git)
 echo       Copying source files...
-for %%i in ("%SCRIPT_DIR%*") do (
-    set "fname=%%~nxi"
+for /f "delims=" %%f in ('dir /b "%SCRIPT_DIR%"') do (
+    set "fname=%%f"
     if /i not "!fname!"=="node_modules" (
         if /i not "!fname!"=="dist" (
             if /i not "!fname!"==".git" (
-                if exist "%%i\" (
-                    xcopy "%%i" "%BUILD_DIR%\!fname!\" /e /i /q >nul 2>&1
+                if exist "%SCRIPT_DIR%!fname!\" (
+                    xcopy "%SCRIPT_DIR%!fname!" "%BUILD_DIR%\!fname!\" /e /i /q >nul 2>&1
                 ) else (
-                    copy "%%i" "%BUILD_DIR%\" >nul 2>&1
+                    copy "%SCRIPT_DIR%!fname!" "%BUILD_DIR%\" >nul 2>&1
                 )
             )
         )
@@ -336,25 +336,11 @@ set "START_MENU=%APPDATA%\Microsoft\Windows\Start Menu\Programs"
 set "SHORTCUT_FILE=%START_MENU%\Flint.lnk"
 
 :: Use PowerShell to create a proper .lnk shortcut
-powershell -NoProfile -Command ^
-    "$ws = New-Object -ComObject WScript.Shell; ^
-     $sc = $ws.CreateShortcut('%SHORTCUT_FILE%'); ^
-     $sc.TargetPath = '%FLINT_DIR%\flint.bat'; ^
-     $sc.IconLocation = '%FLINT_DIR%\icon.png'; ^
-     $sc.WorkingDirectory = '%FLINT_DIR%'; ^
-     $sc.Description = 'Flint Local Knowledge Base with AI'; ^
-     $sc.Save()" >nul 2>&1
+powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('%SHORTCUT_FILE%'); $sc.TargetPath = '%FLINT_DIR%\flint.bat'; $sc.IconLocation = '%FLINT_DIR%\icon.png'; $sc.WorkingDirectory = '%FLINT_DIR%'; $sc.Description = 'Flint Local Knowledge Base with AI'; $sc.Save()" >nul 2>&1
 
 :: Also create Desktop shortcut
 set "DESKTOP=%USERPROFILE%\Desktop"
-powershell -NoProfile -Command ^
-    "$ws = New-Object -ComObject WScript.Shell; ^
-     $sc = $ws.CreateShortcut('%DESKTOP%\Flint.lnk'); ^
-     $sc.TargetPath = '%FLINT_DIR%\flint.bat'; ^
-     $sc.IconLocation = '%FLINT_DIR%\icon.png'; ^
-     $sc.WorkingDirectory = '%FLINT_DIR%'; ^
-     $sc.Description = 'Flint Local Knowledge Base with AI'; ^
-     $sc.Save()" >nul 2>&1
+powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('%DESKTOP%\Flint.lnk'); $sc.TargetPath = '%FLINT_DIR%\flint.bat'; $sc.IconLocation = '%FLINT_DIR%\icon.png'; $sc.WorkingDirectory = '%FLINT_DIR%'; $sc.Description = 'Flint Local Knowledge Base with AI'; $sc.Save()" >nul 2>&1
 
 echo       OK  Start Menu and Desktop shortcuts created
 
