@@ -1,360 +1,226 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-# ============================
-# Flint — Install Script
-# With Python AI Agent
-# ============================
+REPO_OWNER="Chintanpatel24"
+REPO_NAME="flint"
+REPO_BRANCH="${FLINT_BRANCH:-main}"
+REPO_ARCHIVE_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/archive/refs/heads/${REPO_BRANCH}.tar.gz"
 
-BOLD='\033[1m'
-DIM='\033[2m'
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+FLINT_HOME="${FLINT_HOME:-$HOME/.flint}"
+FLINT_APP="$FLINT_HOME/app"
+FLINT_SOURCE_CACHE="$FLINT_HOME/source"
+FLINT_BIN="$FLINT_HOME/bin"
 
-FLINT_DIR="$HOME/.flint"
-FLINT_APP="$FLINT_DIR/app"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-echo ""
-echo ""
-echo -e "███████╗██╗     ██╗███╗   ██╗████████╗ "
-echo -e "██╔════╝██║     ██║████╗  ██║╚══██╔══╝ "
-echo -e "█████╗  ██║     ██║██╔██╗ ██║   ██║    "
-echo -e "██╔══╝  ██║     ██║██║╚██╗██║   ██║    "
-echo -e "██║     ███████╗██║██║ ╚████║   ██║    "
-echo -e "╚═╝     ╚══════╝╚═╝╚═╝  ╚═══╝   ╚═╝    "
-echo ""
-
-# ---- Step 1: Check Node.js ----
-
-echo -e "${BLUE}[1/9]${NC} Checking Node.js..."
-
-if ! command -v node &> /dev/null; then
-    echo -e "${YELLOW}Node.js not found.${NC}"
-    echo -e "Install it from ${BOLD}https://nodejs.org${NC} (v18+) and re-run this script."
-    exit 1
+BOLD=''
+DIM=''
+GREEN=''
+YELLOW=''
+RED=''
+NC=''
+if [ -t 1 ]; then
+  BOLD='\033[1m'
+  DIM='\033[2m'
+  GREEN='\033[0;32m'
+  YELLOW='\033[0;33m'
+  RED='\033[0;31m'
+  NC='\033[0m'
 fi
 
-NODE_MAJOR=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
-if [ "$NODE_MAJOR" -lt 18 ]; then
-    echo -e "${RED}Node.js 18+ required. You have $(node -v). Please upgrade.${NC}"
-    exit 1
-fi
+say() { printf "%b\n" "$*"; }
+step() { say "${BOLD}[$1/8]${NC} $2"; }
+ok() { say "      OK  $1"; }
+warn() { say "      WARN  $1"; }
+fail() { say "${RED}ERROR:${NC} $1" >&2; exit 1; }
+have() { command -v "$1" >/dev/null 2>&1; }
 
-echo -e "      ${GREEN}✓${NC} Node.js $(node -v)"
-echo -e "      ${GREEN}✓${NC} npm $(npm -v)"
+print_header() {
+  say ""
+  say "Flint Desktop Installer"
+  say "Local-first knowledge base with AI"
+  say ""
+}
 
-# ---- Step 2: Check Python ----
+check_node() {
+  step 1 "Checking Node.js"
+  have node || fail "Node.js 18+ is required. Install it from https://nodejs.org and run this installer again."
+  have npm || fail "npm is required and should be installed with Node.js."
 
-echo -e "${BLUE}[2/9]${NC} Checking Python..."
+  node_major="$(node -p "process.versions.node.split('.')[0]" 2>/dev/null || echo 0)"
+  if [ "$node_major" -lt 18 ]; then
+    fail "Node.js 18+ is required. Found $(node -v)."
+  fi
 
-PYTHON_CMD=""
-if command -v python3 &> /dev/null; then
+  ok "Node.js $(node -v)"
+  ok "npm $(npm -v)"
+}
+
+check_python() {
+  step 2 "Checking Python"
+  PYTHON_CMD=""
+  if have python3; then
     PYTHON_CMD="python3"
-elif command -v python &> /dev/null; then
+  elif have python; then
     PYTHON_CMD="python"
-fi
+  fi
 
-if [ -z "$PYTHON_CMD" ]; then
-    echo -e "${YELLOW}⚠ Python not found. AI Agent will not be available.${NC}"
-    echo -e "      Install Python 3: ${BOLD}sudo apt install python3 python3-pip${NC} (or equivalent)"
-else
-    PY_VERSION=$($PYTHON_CMD --version 2>&1 | head -1)
-    echo -e "      ${GREEN}✓${NC} $PY_VERSION"
-fi
+  if [ -z "$PYTHON_CMD" ]; then
+    warn "Python 3 was not found. The note app will install, but the AI agent will be unavailable."
+  else
+    ok "$($PYTHON_CMD --version 2>&1)"
+  fi
+}
 
-# ---- Step 3: Clean old installation ----
+resolve_source() {
+  step 3 "Preparing source"
 
-echo -e "${BLUE}[3/9]${NC} Preparing installation directory..."
+  local_dir=""
+  if [ -n "${FLINT_SOURCE_DIR:-}" ] && [ -f "$FLINT_SOURCE_DIR/package.json" ]; then
+    local_dir="$FLINT_SOURCE_DIR"
+  elif [ -f "./package.json" ] && [ -d "./src" ] && [ -d "./electron" ] && grep -q '"name"[[:space:]]*:[[:space:]]*"flint"' ./package.json; then
+    local_dir="$(pwd)"
+  fi
 
-# Preserve vault data from localStorage (in browser profile)
-if [ -d "$FLINT_DIR" ]; then
-    echo -e "      ${DIM}Cleaning old installation (vault data preserved)...${NC}"
-    # Keep the flint-data backup if it exists
-    if [ -f "$FLINT_DIR/vault-backup.json" ]; then
-        VAULT_BACKUP="$FLINT_DIR/vault-backup.json"
-    fi
-    rm -rf "$FLINT_DIR/app" "$FLINT_DIR/.build" "$FLINT_DIR/agent"
-    rm -f "$FLINT_DIR/flint" "$FLINT_DIR/icon.png"
-fi
+  rm -rf "$FLINT_SOURCE_CACHE"
+  mkdir -p "$FLINT_HOME"
 
-mkdir -p "$FLINT_APP"
+  if [ -n "$local_dir" ]; then
+    ok "Using local source at $local_dir"
+    mkdir -p "$FLINT_SOURCE_CACHE"
+    (
+      cd "$local_dir"
+      tar --exclude='./node_modules' --exclude='./dist' --exclude='./dist_electron' --exclude='./.git' -cf - .
+    ) | (
+      cd "$FLINT_SOURCE_CACHE"
+      tar -xf -
+    )
+    return
+  fi
 
-# Restore vault backup if exists
-if [ -n "$VAULT_BACKUP" ] && [ -f "$VAULT_BACKUP" ]; then
-    cp "$VAULT_BACKUP" "$FLINT_DIR/vault-backup.json"
-fi
+  tmp_dir="$(mktemp -d)"
+  archive="$tmp_dir/flint.tar.gz"
+  if have curl; then
+    curl -fsSL "$REPO_ARCHIVE_URL" -o "$archive"
+  elif have wget; then
+    wget -qO "$archive" "$REPO_ARCHIVE_URL"
+  else
+    fail "curl or wget is required to download Flint from GitHub."
+  fi
 
-# ---- Step 4: Build the web app ----
+  mkdir -p "$FLINT_SOURCE_CACHE"
+  tar -xzf "$archive" --strip-components=1 -C "$FLINT_SOURCE_CACHE"
+  rm -rf "$tmp_dir"
+  ok "Downloaded ${REPO_OWNER}/${REPO_NAME} (${REPO_BRANCH})"
+}
 
-echo -e "${BLUE}[4/9]${NC} Building Flint..."
+prepare_install_dir() {
+  step 4 "Preparing installation"
+  mkdir -p "$FLINT_APP" "$FLINT_BIN"
+  rm -rf "$FLINT_APP" "$FLINT_HOME/.build"
+  mkdir -p "$FLINT_APP"
+  ok "Install directory ready at $FLINT_HOME"
+}
 
-BUILD_DIR="$FLINT_DIR/.build"
-mkdir -p "$BUILD_DIR"
+build_frontend() {
+  step 5 "Building Flint"
+  BUILD_DIR="$FLINT_HOME/.build"
+  rm -rf "$BUILD_DIR"
+  mkdir -p "$BUILD_DIR"
+  (
+    cd "$FLINT_SOURCE_CACHE"
+    tar --exclude='./node_modules' --exclude='./dist' --exclude='./dist_electron' --exclude='./.git' -cf - .
+  ) | (
+    cd "$BUILD_DIR"
+    tar -xf -
+  )
 
-for item in "$SCRIPT_DIR"/*; do
-    name=$(basename "$item")
-    case "$name" in
-        node_modules|dist|.git) ;;
-        *) cp -r "$item" "$BUILD_DIR/" ;;
-    esac
-done
+  cd "$BUILD_DIR"
+  if [ -f package-lock.json ]; then
+    npm ci --loglevel=error || npm install --loglevel=error
+  else
+    npm install --loglevel=error
+  fi
+  npm run build
 
-cd "$BUILD_DIR"
+  [ -f "$BUILD_DIR/dist/index.html" ] || fail "Build failed because dist/index.html was not created."
+  ok "Frontend build complete"
+}
 
-echo -e "      ${DIM}Installing npm dependencies...${NC}"
-npm install --loglevel=error 2>/dev/null || npm install
+install_agent() {
+  step 6 "Installing AI agent files"
+  mkdir -p "$FLINT_HOME/agent" "$FLINT_APP/agent"
+  if [ -d "$BUILD_DIR/agent" ]; then
+    rm -rf "$FLINT_HOME/agent" "$FLINT_APP/agent"
+    mkdir -p "$FLINT_HOME/agent" "$FLINT_APP/agent"
+    cp -R "$BUILD_DIR/agent/." "$FLINT_HOME/agent/"
+    cp -R "$BUILD_DIR/agent/." "$FLINT_APP/agent/"
+    ok "Agent files copied"
+  else
+    warn "No agent directory found in source."
+  fi
 
-echo -e "      ${DIM}Compiling...${NC}"
-npm run build
+  if [ -n "${PYTHON_CMD:-}" ] && [ -f "$FLINT_HOME/agent/requirements.txt" ]; then
+    "$PYTHON_CMD" -m pip install --user -q -r "$FLINT_HOME/agent/requirements.txt" || warn "Python packages were not installed. The app still opens; install agent requirements manually for AI."
+  fi
+}
 
-if [ ! -f "$BUILD_DIR/dist/index.html" ]; then
-    echo -e "${RED}Build failed — dist/index.html not created.${NC}"
-    exit 1
-fi
+install_desktop_app() {
+  step 7 "Installing desktop app"
+  cp "$BUILD_DIR/electron/main.cjs" "$FLINT_APP/main.cjs"
+  cp -R "$BUILD_DIR/dist" "$FLINT_APP/dist"
+  [ -f "$BUILD_DIR/public/flint-logo.png" ] && cp "$BUILD_DIR/public/flint-logo.png" "$FLINT_APP/icon.png"
 
-echo -e "      ${GREEN}✓${NC} Build complete"
-
-# ---- Step 5: Set up Python AI Agent ----
-
-echo -e "${BLUE}[5/9]${NC} Setting up AI Agent..."
-
-AGENT_DIR="$FLINT_DIR/agent"
-mkdir -p "$AGENT_DIR"
-
-# Copy agent files
-if [ -d "$BUILD_DIR/agent" ]; then
-    cp -r "$BUILD_DIR/agent/"* "$AGENT_DIR/"
-    echo -e "      ${GREEN}✓${NC} Agent files copied"
-else
-    echo -e "      ${YELLOW}⚠ No agent/ directory found in source${NC}"
-fi
-
-# Install Python dependencies
-if [ -n "$PYTHON_CMD" ]; then
-    if [ -f "$AGENT_DIR/requirements.txt" ]; then
-        echo -e "      ${DIM}Installing Python packages (flask, flask-cors, requests)...${NC}"
-        $PYTHON_CMD -m pip install -q flask flask-cors requests 2>/dev/null || {
-            # Try with --user flag
-            $PYTHON_CMD -m pip install --user -q flask flask-cors requests 2>/dev/null || {
-                echo -e "      ${YELLOW}⚠ pip install failed. Agent may need manual setup.${NC}"
-                echo -e "      ${DIM}Run: pip3 install flask flask-cors requests${NC}"
-            }
-        }
-        if $PYTHON_CMD -c "import flask, flask_cors, requests" 2>/dev/null; then
-            echo -e "      ${GREEN}✓${NC} Python packages installed"
-        else
-            echo -e "      ${YELLOW}⚠ Some packages missing. AI will use browser fallback.${NC}"
-        fi
-    fi
-fi
-
-# Test agent can start
-if [ -n "$PYTHON_CMD" ] && [ -f "$AGENT_DIR/agent.py" ]; then
-    # Quick syntax check
-    if $PYTHON_CMD -c "import ast; ast.parse(open('$AGENT_DIR/agent.py').read())" 2>/dev/null; then
-        echo -e "      ${GREEN}✓${NC} Agent script valid"
-    else
-        echo -e "      ${YELLOW}⚠ Agent script has errors${NC}"
-    fi
-fi
-
-# ---- Step 6: Create application icon ----
-
-echo -e "${BLUE}[6/9]${NC} Creating application icon..."
-
-ICON_DIR="$FLINT_DIR/icons"
-mkdir -p "$ICON_DIR"
-
-if [ -f "$BUILD_DIR/public/flint-logo.png" ]; then
-    # Copy the main PNG icon everywhere
-    cp "$BUILD_DIR/public/flint-logo.png" "$FLINT_DIR/icon.png"
-    cp "$BUILD_DIR/public/flint-logo.png" "$FLINT_APP/icon.png"
-    cp "$BUILD_DIR/public/flint-logo.png" "$ICON_DIR/flint.png"
-
-    # Create resized versions using ImageMagick if available
-    if command -v convert &> /dev/null; then
-        convert -background none -resize 256x256 "$ICON_DIR/flint.png" "$ICON_DIR/flint-256.png" 2>/dev/null || true
-        convert -background none -resize 128x128 "$ICON_DIR/flint.png" "$ICON_DIR/flint-128.png" 2>/dev/null || true
-        convert -background none -resize 64x64 "$ICON_DIR/flint.png" "$ICON_DIR/flint-64.png" 2>/dev/null || true
-        convert -background none -resize 48x48 "$ICON_DIR/flint.png" "$ICON_DIR/flint-48.png" 2>/dev/null || true
-        if [ -f "$ICON_DIR/flint-256.png" ]; then
-            cp "$ICON_DIR/flint-256.png" "$FLINT_DIR/icon.png"
-            cp "$ICON_DIR/flint-256.png" "$FLINT_APP/icon.png"
-        fi
-        echo -e "      ${GREEN}✓${NC} Icon created at all sizes (ImageMagick)"
-    else
-        # Just use the PNG as-is at all sizes
-        cp "$ICON_DIR/flint.png" "$ICON_DIR/flint-256.png"
-        cp "$ICON_DIR/flint.png" "$ICON_DIR/flint-128.png"
-        cp "$ICON_DIR/flint.png" "$ICON_DIR/flint-64.png"
-        cp "$ICON_DIR/flint.png" "$ICON_DIR/flint-48.png"
-        echo -e "      ${GREEN}✓${NC} Icon created from PNG"
-    fi
-else
-    echo -e "      ${YELLOW}⚠${NC} No flint-logo.png found"
-fi
-
-# ---- Step 7: Set up Electron app ----
-
-echo -e "${BLUE}[7/9]${NC} Setting up desktop mode..."
-
-# Create isolated Electron app directory with NO "type":"module"
-cat > "$FLINT_APP/package.json" << 'PKGJSON'
+  cat > "$FLINT_APP/package.json" <<'JSON'
 {
   "name": "flint-desktop",
-  "version": "1.0.0",
+  "version": "2.1.0",
   "private": true,
-  "main": "main.cjs"
+  "main": "main.cjs",
+  "devDependencies": {
+    "electron": "^42.4.0"
+  }
 }
-PKGJSON
+JSON
 
-# Copy Electron main process
-cp "$BUILD_DIR/electron/main.cjs" "$FLINT_APP/main.cjs"
-
-# Copy built web app
-cp -r "$BUILD_DIR/dist" "$FLINT_APP/dist"
-
-# Copy agent into app dir too (for Electron to auto-start)
-mkdir -p "$FLINT_APP/agent"
-cp -r "$AGENT_DIR/"* "$FLINT_APP/agent/" 2>/dev/null || true
-
-# Install Electron
-cd "$FLINT_APP"
-echo -e "      ${DIM}Installing Electron (this may take a minute)...${NC}"
-npm install electron --save-dev --loglevel=error 2>/dev/null || {
-    echo -e "      ${YELLOW}Electron install from npm failed, retrying...${NC}"
-    npm install electron --save-dev
+  cd "$FLINT_APP"
+  npm install --omit=optional --loglevel=error
+  [ -x "$FLINT_APP/node_modules/.bin/electron" ] || fail "Electron was not installed. Flint must run as a desktop app, so no localhost fallback was created."
+  ok "Electron desktop runtime installed"
 }
 
-ELECTRON_OK=false
-if [ -d "$FLINT_APP/node_modules/electron" ]; then
-    ELECTRON_OK=true
-    EVERSION=$(node -e "console.log(require('./node_modules/electron/package.json').version)" 2>/dev/null || echo "installed")
-    echo -e "      ${GREEN}✓${NC} Electron v$EVERSION"
-else
-    echo -e "      ${YELLOW}⚠ Electron not available. Will use browser mode.${NC}"
-fi
+create_launchers() {
+  step 8 "Creating launchers"
 
-# Clean up build directory
-rm -rf "$BUILD_DIR"
-
-# ---- Step 8: Create launcher scripts ----
-
-echo -e "${BLUE}[8/9]${NC} Creating launcher..."
-
-# Main launcher — starts agent + Electron
-cat > "$FLINT_DIR/flint" << LAUNCHER
+  cat > "$FLINT_BIN/flint" <<LAUNCHER
 #!/usr/bin/env bash
-# Flint Desktop Launcher v4 — with AI Agent
-
-FLINT_DIR="$FLINT_DIR"
+set -e
 FLINT_APP="$FLINT_APP"
-AGENT_PID_FILE="/tmp/flint-agent-\$(id -u).pid"
-
-# Start Python AI Agent in background
-start_agent() {
-    if [ -f "\$AGENT_PID_FILE" ]; then
-        OLD_PID=\$(cat "\$AGENT_PID_FILE" 2>/dev/null)
-        if kill -0 "\$OLD_PID" 2>/dev/null; then
-            return  # Already running
-        fi
-    fi
-    
-    PYTHON_CMD=""
-    command -v python3 &>/dev/null && PYTHON_CMD="python3"
-    [ -z "\$PYTHON_CMD" ] && command -v python &>/dev/null && PYTHON_CMD="python"
-    
-    if [ -n "\$PYTHON_CMD" ] && [ -f "\$FLINT_DIR/agent/agent.py" ]; then
-        \$PYTHON_CMD "\$FLINT_DIR/agent/agent.py" &
-        AGENT_PID=\$!
-        echo \$AGENT_PID > "\$AGENT_PID_FILE"
-        sleep 1  # Give agent time to start
-    fi
-}
-
-stop_agent() {
-    if [ -f "\$AGENT_PID_FILE" ]; then
-        OLD_PID=\$(cat "\$AGENT_PID_FILE" 2>/dev/null)
-        kill "\$OLD_PID" 2>/dev/null
-        rm -f "\$AGENT_PID_FILE"
-    fi
-}
-
-# Start agent
-start_agent
-
-# Launch app
-if [ -d "\$FLINT_APP/node_modules/electron" ]; then
-    "\$FLINT_APP/node_modules/.bin/electron" "\$FLINT_APP" "\$@"
-    EXIT_CODE=\$?
-else
-    echo "Flint: Electron not found, opening in browser..."
-    python3 -m http.server 4777 --directory "\$FLINT_APP/dist" &
-    HTTP_PID=\$!
-    xdg-open http://localhost:4777 2>/dev/null || sensible-browser http://localhost:4777
-    wait \$HTTP_PID
-    EXIT_CODE=\$?
+if [ ! -x "\$FLINT_APP/node_modules/.bin/electron" ]; then
+  echo "Flint desktop runtime is missing. Reinstall with: curl -fsSL https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}/install.sh | bash" >&2
+  exit 1
 fi
-
-# Cleanup agent on exit
-stop_agent
-exit \$EXIT_CODE
+exec "\$FLINT_APP/node_modules/.bin/electron" "\$FLINT_APP" "\$@"
 LAUNCHER
-chmod +x "$FLINT_DIR/flint"
+  chmod +x "$FLINT_BIN/flint"
 
-# Agent-only launcher (for browser mode)
-cat > "$FLINT_DIR/flint-agent" << AGENT_LAUNCHER
+  cat > "$FLINT_BIN/flint-agent" <<AGENT
 #!/usr/bin/env bash
-# Flint AI Agent standalone launcher
+set -e
 PYTHON_CMD=""
-command -v python3 &>/dev/null && PYTHON_CMD="python3"
-[ -z "\$PYTHON_CMD" ] && command -v python &>/dev/null && PYTHON_CMD="python"
+command -v python3 >/dev/null 2>&1 && PYTHON_CMD="python3"
+[ -z "\$PYTHON_CMD" ] && command -v python >/dev/null 2>&1 && PYTHON_CMD="python"
+[ -n "\$PYTHON_CMD" ] || { echo "Python 3 is required for the Flint AI agent." >&2; exit 1; }
+exec "\$PYTHON_CMD" "$FLINT_HOME/agent/agent.py" "\$@"
+AGENT
+  chmod +x "$FLINT_BIN/flint-agent"
 
-if [ -z "\$PYTHON_CMD" ]; then
-    echo "Error: Python 3 not found"
-    exit 1
-fi
-
-echo "Starting Flint AI Agent on http://localhost:5100"
-echo "Press Ctrl+C to stop"
-exec \$PYTHON_CMD "$FLINT_DIR/agent/agent.py"
-AGENT_LAUNCHER
-chmod +x "$FLINT_DIR/flint-agent"
-
-# System-wide command
-FLINT_BIN="/usr/local/bin/flint"
-if [ -w "/usr/local/bin" ] || [ -w "$FLINT_BIN" ]; then
-    ln -sf "$FLINT_DIR/flint" "$FLINT_BIN" 2>/dev/null || {
-        sudo ln -sf "$FLINT_DIR/flint" "$FLINT_BIN" 2>/dev/null || true
-    }
-else
-    sudo ln -sf "$FLINT_DIR/flint" "$FLINT_BIN" 2>/dev/null || true
-fi
-
-echo -e "      ${GREEN}✓${NC} Command: ${BOLD}flint${NC}"
-
-# ---- Step 9: Create desktop entry ----
-
-echo -e "${BLUE}[9/9]${NC} Creating app menu entry..."
-
-DESKTOP_FILE="$HOME/.local/share/applications/flint.desktop"
-mkdir -p "$(dirname "$DESKTOP_FILE")"
-
-ICON_PATH="$FLINT_DIR/icon.png"
-if [ -f "$ICON_DIR/flint-256.png" ]; then
-    ICON_PATH="$ICON_DIR/flint-256.png"
-fi
-
-cat > "$DESKTOP_FILE" << DESKTOP
+  if [ -d "$HOME/.local/share/applications" ] || mkdir -p "$HOME/.local/share/applications"; then
+    icon_path="$FLINT_APP/icon.png"
+    cat > "$HOME/.local/share/applications/flint.desktop" <<DESKTOP
 [Desktop Entry]
 Name=Flint
-Comment=Local Knowledge Base with AI
-Exec=$FLINT_DIR/flint %U
-Icon=$ICON_PATH
+Comment=Local-first knowledge base with AI
+Exec=$FLINT_BIN/flint %U
+Icon=$icon_path
 Type=Application
 Categories=Office;Utility;TextEditor;
 Keywords=notes;markdown;knowledge;ai;
@@ -362,38 +228,43 @@ StartupNotify=true
 Terminal=false
 StartupWMClass=Flint
 DESKTOP
+    chmod +x "$HOME/.local/share/applications/flint.desktop"
+    update-desktop-database "$HOME/.local/share/applications" >/dev/null 2>&1 || true
+    ok "Application menu entry created"
+  fi
 
-chmod +x "$DESKTOP_FILE"
-update-desktop-database ~/.local/share/applications/ 2>/dev/null || true
+  case ":$PATH:" in
+    *":$FLINT_BIN:"*) ok "Command available as flint" ;;
+    *)
+      profile_file="$HOME/.profile"
+      printf '\n# Flint\nexport PATH="$HOME/.flint/bin:$PATH"\n' >> "$profile_file"
+      warn "Added $FLINT_BIN to PATH in $profile_file. Open a new terminal or run: export PATH=\"$FLINT_BIN:\$PATH\""
+      ;;
+  esac
+}
 
-echo -e "      ${GREEN}✓${NC} Added to app menu"
+cleanup() {
+  rm -rf "${BUILD_DIR:-}" 2>/dev/null || true
+}
 
-# ---- Done ----
+main() {
+  print_header
+  check_node
+  check_python
+  resolve_source
+  prepare_install_dir
+  build_frontend
+  install_agent
+  install_desktop_app
+  create_launchers
+  cleanup
 
-echo ""
-echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${GREEN}  ✓ Flint installed successfully!${NC}"
-echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
-echo -e "  Open from app menu:   ${BOLD}Search 'Flint' in your app launcher${NC}"
-echo -e "  Run from terminal:    ${BOLD}flint${NC}"
-echo -e "  AI Agent only:        ${BOLD}flint-agent${NC}"
-echo -e "  Installed at:         ${DIM}$FLINT_APP${NC}"
-echo ""
-if [ "$ELECTRON_OK" = true ]; then
-    echo -e "  Mode:    ${GREEN}Desktop app (Electron)${NC}"
-else
-    echo -e "  Mode:    ${YELLOW}Browser mode (install Electron for desktop)${NC}"
-fi
-if [ -n "$PYTHON_CMD" ]; then
-    echo -e "  AI:      ${GREEN}Python Agent + Ollama${NC}"
-else
-    echo -e "  AI:      ${YELLOW}Browser fallback (install Python for agent)${NC}"
-fi
-echo ""
-echo -e "  ${DIM}Update:  bash update.sh${NC}"
-echo -e "  ${DIM}Remove:  bash uninstall.sh${NC}"
-echo ""
-echo -e "  ${DIM}For full AI: Install Ollama from https://ollama.ai${NC}"
-echo -e "  ${DIM}Then: ollama pull llama3.2 (or any model)${NC}"
-echo ""
+  say ""
+  say "${GREEN}Flint installed successfully.${NC}"
+  say "Open it from your app launcher or run:"
+  say "  $FLINT_BIN/flint"
+  say ""
+  say "For full local AI, install Ollama and run: ollama pull llama3.2"
+}
+
+main "$@"
