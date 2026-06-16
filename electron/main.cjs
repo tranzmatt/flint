@@ -9,33 +9,42 @@ const { spawn } = require('child_process');
 let mainWindow = null;
 let agentProcess = null;
 
-const APP_DIR = path.join(__dirname, '..');
+const APP_DIR = __dirname;
 const DIST_FILE = path.join(APP_DIR, 'dist', 'index.html');
-const ICON_FILE = path.join(APP_DIR, 'public', 'flint-logo.png');
+const ICON_FILE = path.join(APP_DIR, 'icon.png');
 
 // ── Start Python AI Agent ──────────────────────────────────
 function startAgent() {
-  const binDir = path.join(__dirname, 'bin');
-  const executableName = process.platform === 'win32' ? 'agent.exe' : 'agent';
-  let agentExecutable = path.join(binDir, executableName);
+  const agentDir = path.join(APP_DIR, 'agent');
+  const agentScript = path.join(agentDir, 'agent.py');
 
-  if (agentExecutable.includes('app.asar')) {
-    agentExecutable = agentExecutable.replace('app.asar', 'app.asar.unpacked');
-  }
-
-  console.log(`[Flint] Trying to start agent at: ${agentExecutable}`);
-
-  if (!fs.existsSync(agentExecutable)) {
-    console.log(`[Flint] No compiled agent found at ${agentExecutable} — AI will use browser fallback`);
+  if (!fs.existsSync(agentScript)) {
+    console.log('[Flint] No agent found — AI will use browser fallback');
     return;
   }
 
-  console.log('[Flint] Starting standalone AI agent binary...');
+  console.log('[Flint] Starting Python AI agent...');
 
-  agentProcess = spawn(agentExecutable, [], {
+  // Try python3 first, then python
+  const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+
+  agentProcess = spawn(pythonCmd, [agentScript], {
+    cwd: agentDir,
     env: { ...process.env },
-    stdio: 'ignore',
+    stdio: ['pipe', 'pipe', 'pipe'],
     detached: false,
+  });
+
+  agentProcess.stdout.on('data', (data) => {
+    const msg = data.toString().trim();
+    if (msg) console.log('[Flint Agent]', msg);
+  });
+
+  agentProcess.stderr.on('data', (data) => {
+    const msg = data.toString().trim();
+    if (msg && !msg.includes('DeprecationWarning') && !msg.includes('WARNING')) {
+      console.log('[Flint Agent]', msg);
+    }
   });
 
   agentProcess.on('error', (err) => {
@@ -52,7 +61,7 @@ function startAgent() {
 function stopAgent() {
   if (agentProcess) {
     console.log('[Flint] Stopping agent...');
-      agentProcess.kill('SIGTERM');
+    agentProcess.kill('SIGTERM');
     agentProcess = null;
   }
 }
@@ -81,7 +90,6 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
-      webSecurity: false,
     },
   });
 
