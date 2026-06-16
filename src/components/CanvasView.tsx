@@ -53,10 +53,18 @@ const CARD_COLORS = [
   { label: 'Pink',    border: '#e040a0', glow: 'rgba(224,64,160,0.2)' },
 ];
 
-// ─── Connection colors ────────────────────────────────────────────────────────
+// ─── Connection colors (Defaulting to slate steel blue `#56728c`!) ───────────
 
 const CONN_COLORS = [
-  '#7f6df2', '#e5555a', '#43a047', '#00acc1', '#e68a00', '#c9b400', '#e040a0', '#dcddde', '#555555',
+  '#56728c', // 1. Slate steel blue (default!)
+  '#7f6df2', // 2. Obsidian Purple
+  '#e5555a', // 3. Red
+  '#43a047', // 4. Green
+  '#00acc1', // 5. Cyan
+  '#e68a00', // 6. Orange
+  '#c9b400', // 7. Yellow
+  '#e040a0', // 8. Pink
+  '#dcddde', // 9. Slate Gray
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -101,20 +109,38 @@ function getControlPt(pt: { x: number; y: number }, side: Side, offset: number) 
   }
 }
 
+// Physics-enhanced dynamic curved bezier calculation to prevent overlapping loops
 function smartBezier(
   p1: { x: number; y: number }, s1: Side,
   p2: { x: number; y: number }, s2: Side | null
 ) {
-  const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-  const offset = Math.min(dist * 0.5, 80);
-  const c1 = getControlPt(p1, s1, offset);
-  
   if (!s2) {
-    // Floating endpoint while dragging
+    // Free drag mode
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const dist = Math.hypot(dx, dy);
+    const offset = Math.min(dist * 0.4, 75);
+    const c1 = getControlPt(p1, s1, offset);
     return `M ${p1.x} ${p1.y} C ${c1.x} ${c1.y}, ${p2.x} ${p2.y}, ${p2.x} ${p2.y}`;
   }
+
+  // Active connected line mode (Enhanced Organic Bends)
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const dist = Math.hypot(dx, dy);
   
-  const c2 = getControlPt(p2, s2, offset);
+  let offset1 = Math.min(dist * 0.35, 120);
+  let offset2 = Math.min(dist * 0.35, 120);
+
+  // If cards are very close, decrease stiffness to prevent overlapping loops
+  if (dist < 120) {
+    offset1 = dist * 0.22;
+    offset2 = dist * 0.22;
+  }
+
+  const c1 = getControlPt(p1, s1, offset1);
+  const c2 = getControlPt(p2, s2, offset2);
+
   return `M ${p1.x} ${p1.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${p2.x} ${p2.y}`;
 }
 
@@ -127,7 +153,7 @@ function findNearestAnchor(
   let best: { cardId: string; side: Side; pt: { x: number; y: number } } | null = null;
   let bestDist = snapRadius;
   for (const card of cards) {
-    if (card.id === excludeId) continue;
+    if (card.id === excludeId || card.id.startsWith('frame')) continue; // Skip frame cards
     for (const side of sides) {
       const pt = getSidePt(card, side);
       const d = Math.hypot(mx - pt.x, my - pt.y);
@@ -300,7 +326,13 @@ export function CanvasView() {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   
-  const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null);
+  const dragRef = useRef<{ 
+    id: string; 
+    offsetX: number; 
+    offsetY: number; 
+    enclosedCardIds?: string[]; 
+  } | null>(null);
+  
   const resizeRef = useRef<{ id: string; startX: number; startY: number; startW: number; startH: number } | null>(null);
   const canvasDragRef = useRef<{ x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -322,13 +354,19 @@ export function CanvasView() {
   
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const [snapTarget, setSnapTarget] = useState<{ cardId: string; side: Side } | null>(null);
-  const [selectedConnColor, setSelectedConnColor] = useState<string>(CONN_COLORS[0]);
+  const [selectedConnColor, setSelectedConnColor] = useState<string>(CONN_COLORS[0]); // Soft steel blue default
   const [hoveredConn, setHoveredConn] = useState<string | null>(null);
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null);
   
   // Custom right click line context menu state
   const [lineContextMenu, setLineContextMenu] = useState<LineContextMenu | null>(null);
+  
+  // Dynamic Option Toggles
+  const [showArrows, setShowArrows] = useState(true);
+  
+  // Selection box state for marquee framing
+  const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; currX: number; currY: number } | null>(null);
   
   // Note adding dropdown
   const [notePickerOpen, setNotePickerOpen] = useState(false);
@@ -345,6 +383,17 @@ export function CanvasView() {
 
   const workspace = activeVaultId ? state.vaultData[activeVaultId] : null;
   const cards = workspace?.canvasCards || [];
+
+  // Frame Rendering Layer Sort: frames are sorted to index 0 so they naturally sit in the background
+  const sortedCards = useMemo(() => {
+    return [...cards].sort((a, b) => {
+      const aIsFrame = a.id.startsWith('frame');
+      const bIsFrame = b.id.startsWith('frame');
+      if (aIsFrame && !bIsFrame) return -1;
+      if (!aIsFrame && bIsFrame) return 1;
+      return 0;
+    });
+  }, [cards]);
 
   const [cardColors, setCardColors] = useState<Record<string, number>>(() => {
     try {
@@ -429,9 +478,9 @@ export function CanvasView() {
   });
 
   const filteredCards = useMemo(() => {
-    if (!query.trim()) return cards;
+    if (!query.trim()) return sortedCards;
     const q = query.toLowerCase();
-    return cards.filter(card => {
+    return sortedCards.filter(card => {
       if (card.type === 'note' && card.noteId) {
         const note = state.notes.find(n => n.id === card.noteId);
         return note && (
@@ -441,7 +490,7 @@ export function CanvasView() {
       }
       return card.content?.toLowerCase().includes(q);
     });
-  }, [cards, query, state.notes]);
+  }, [sortedCards, query, state.notes]);
 
   const wikilinkEdges = useMemo(() => {
     const filteredIds = new Set(filteredCards.map(c => c.id));
@@ -547,6 +596,7 @@ export function CanvasView() {
         setColorPickerOpen(null);
         setNotePickerOpen(false);
         setLineContextMenu(null);
+        setSelectionBox(null);
       }
       
       // Delete card with Backspace or Delete
@@ -596,13 +646,41 @@ export function CanvasView() {
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (dragRef.current) {
+      // Dragging card or Frame
+      const targetId = dragRef.current.id;
+      const isFrame = targetId.startsWith('frame');
+      
       const rawX = (e.clientX - pan.x - dragRef.current.offsetX) / zoom;
       const rawY = (e.clientY - pan.y - dragRef.current.offsetY) / zoom;
-      updateCard(dragRef.current.id, {
-        x: Math.round(rawX / 20) * 20,
-        y: Math.round(rawY / 20) * 20,
-      });
+      
+      const nextX = Math.round(rawX / 20) * 20;
+      const nextY = Math.round(rawY / 20) * 20;
+      
+      const frameCard = cards.find(c => c.id === targetId);
+      if (frameCard) {
+        const deltaX = nextX - frameCard.x;
+        const deltaY = nextY - frameCard.y;
+        
+        if (isFrame && dragRef.current.enclosedCardIds && dragRef.current.enclosedCardIds.length > 0) {
+          // If moving a Frame, translate all enclosed note/text/image cards accordingly!
+          const enclosedSet = new Set(dragRef.current.enclosedCardIds);
+          const updated = cards.map(c => {
+            if (c.id === targetId) {
+              return { ...c, x: nextX, y: nextY };
+            }
+            if (enclosedSet.has(c.id)) {
+              return { ...c, x: c.x + deltaX, y: c.y + deltaY };
+            }
+            return c;
+          });
+          updateCards(updated);
+        } else {
+          // Normal drag
+          updateCard(targetId, { x: nextX, y: nextY });
+        }
+      }
     } else if (resizeRef.current) {
+      // Resizing card
       const dx = (e.clientX - resizeRef.current.startX) / zoom;
       const dy = (e.clientY - resizeRef.current.startY) / zoom;
       const newW = Math.round((resizeRef.current.startW + dx) / 20) * 20;
@@ -612,16 +690,23 @@ export function CanvasView() {
         h: Math.max(80, newH)
       });
     } else if (canvasDragRef.current) {
+      // Panning Canvas via Middle Click/Right Click dragging
       setPan({
         x: e.clientX - canvasDragRef.current.x,
         y: e.clientY - canvasDragRef.current.y,
       });
+    } else if (selectionBox) {
+      // Dragging selection box marquee
+      const rect = containerRef.current!.getBoundingClientRect();
+      const currX = (e.clientX - rect.left - pan.x) / zoom;
+      const currY = (e.clientY - rect.top - pan.y) / zoom;
+      setSelectionBox(prev => prev ? { ...prev, currX, currY } : null);
     } else if (connDragRef.current) {
+      // Dragging connection line
       const rect = containerRef.current!.getBoundingClientRect();
       const mx = (e.clientX - rect.left - pan.x) / zoom;
       const my = (e.clientY - rect.top - pan.y) / zoom;
       
-      // Magnetic snap: find nearest anchor dot on any other card
       const anchor = findNearestAnchor(mx, my, filteredCards, connDragRef.current.fromCard, 30 / zoom);
       if (anchor) {
         connDragRef.current = { ...connDragRef.current, mx: anchor.pt.x, my: anchor.pt.y, toSide: anchor.side };
@@ -635,6 +720,35 @@ export function CanvasView() {
   };
 
   const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (selectionBox) {
+      // Complete marquee frame selection!
+      const minX = Math.min(selectionBox.startX, selectionBox.currX);
+      const maxX = Math.max(selectionBox.startX, selectionBox.currX);
+      const minY = Math.min(selectionBox.startY, selectionBox.currY);
+      const maxY = Math.max(selectionBox.startY, selectionBox.currY);
+      
+      const width = maxX - minX;
+      const height = maxY - minY;
+      
+      // Create a Frame around notes if marquee size is valid
+      if (width > 30 && height > 30) {
+        pushHistorySnapshot();
+        const frameId = `frame-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        const newFrame: CanvasCard = {
+          id: frameId,
+          type: 'text', // Safe standard typing
+          content: 'Frame Group', // Name label
+          x: Math.round(minX / 20) * 20,
+          y: Math.round(minY / 20) * 20,
+          w: Math.round(width / 20) * 20,
+          h: Math.round(height / 20) * 20,
+        };
+        updateCards([...cards, newFrame]);
+        setSelectedCard(frameId);
+      }
+      setSelectionBox(null);
+    }
+    
     if (connDragRef.current) {
       const rect = containerRef.current!.getBoundingClientRect();
       const mx = (e.clientX - rect.left - pan.x) / zoom;
@@ -667,8 +781,18 @@ export function CanvasView() {
     setColorPickerOpen(null);
     setSelectedCard(null);
     setNotePickerOpen(false);
-    canvasDragRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
-    if (containerRef.current) containerRef.current.style.cursor = 'grabbing';
+    
+    if (e.button === 0) {
+      // Left Click on Empty Canvas -> Draw Selection Marquee / Frame!
+      const rect = containerRef.current!.getBoundingClientRect();
+      const mx = (e.clientX - rect.left - pan.x) / zoom;
+      const my = (e.clientY - rect.top - pan.y) / zoom;
+      setSelectionBox({ startX: mx, startY: my, currX: mx, currY: my });
+    } else if (e.button === 1 || e.button === 2) {
+      // Middle or Right Click on Empty Canvas -> Drag-Pan the board!
+      canvasDragRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+      if (containerRef.current) containerRef.current.style.cursor = 'grabbing';
+    }
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -760,7 +884,7 @@ export function CanvasView() {
       if (!from || !to) return;
       const p1 = getSidePt(from, conn.fromSide);
       const p2 = getSidePt(to, conn.toSide);
-      const color = conn.color || accentColor;
+      const color = conn.color || CONN_COLORS[0]; // Soothing steel-blue slate color default
       
       allEdges.push(
         <g key={conn.id}>
@@ -783,14 +907,14 @@ export function CanvasView() {
               });
             }}
           />
-          {/* Main visual connection path */}
+          {/* Main visual connection path with toggled arrows markerEnd */}
           <path
             d={smartBezier(p1, conn.fromSide, p2, conn.toSide)}
             stroke={color}
             strokeWidth={hoveredConn === conn.id || lineContextMenu?.connId === conn.id ? 2.5 / zoom : 1.8 / zoom}
             fill="none"
             strokeOpacity={0.85}
-            markerEnd={`url(#arrow-${color.replace('#', '')})`}
+            markerEnd={showArrows ? `url(#arrow-${color.replace('#', '')})` : undefined}
             style={{ pointerEvents: 'none', transition: 'stroke-width 0.1s ease' }}
           />
         </g>
@@ -809,6 +933,7 @@ export function CanvasView() {
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
       onWheel={handleWheel}
+      onContextMenu={(e) => e.preventDefault()}
     >
       {/* ─── Infinite Grid Background ─── */}
       <div
@@ -833,9 +958,30 @@ export function CanvasView() {
         }}
         onMouseDown={handleCanvasMouseDown}
       >
+        {/* Selection Marquee Frame Visual Render */}
+        {selectionBox && (
+          <div
+            style={{
+              position: 'absolute',
+              left: Math.min(selectionBox.startX, selectionBox.currX),
+              top: Math.min(selectionBox.startY, selectionBox.currY),
+              width: Math.abs(selectionBox.currX - selectionBox.startX),
+              height: Math.abs(selectionBox.currY - selectionBox.startY),
+              border: `1.5px dashed ${accentColor}`,
+              background: 'rgba(127, 109, 242, 0.08)',
+              borderRadius: 4,
+              zIndex: 99,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+
+        {/* Card and Frame node maps */}
         {filteredCards.map(card => {
           const isNote = card.type === 'note';
           const isImage = card.id.startsWith('image');
+          const isFrame = card.id.startsWith('frame');
+          
           const note = isNote ? state.notes.find(n => n.id === card.noteId) : null;
           const isActive = isNote && note?.id === state.activeNoteId;
           
@@ -847,6 +993,8 @@ export function CanvasView() {
             ? note.content.split('\n').find(l => l.startsWith('# '))?.replace(/^# /, '') || note.title
             : isImage
             ? 'PNG Attachment'
+            : isFrame
+            ? 'Frame Group'
             : 'Text Card';
             
           const colorIdx = cardColors[card.id] ?? 0;
@@ -907,9 +1055,14 @@ export function CanvasView() {
                 top: card.y,
                 width: card.w,
                 height: card.h,
-                background: isActive ? cardBgActive : cardBg,
-                border: `${isSelected ? 2 : 1.5}px solid ${cardBorder}`,
-                borderRadius: 8 / zoom,
+                // If it is a Frame, render it transparent, glassy, and with a dashed border
+                background: isFrame 
+                  ? (isSelected ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.005)') 
+                  : (isActive ? cardBgActive : cardBg),
+                border: isFrame 
+                  ? `${isSelected ? 2 : 1.5}px dashed ${isSelected ? accentColor : (colorIdx > 0 ? cardColor.border : '#444448')}`
+                  : `${isSelected ? 2 : 1.5}px solid ${cardBorder}`,
+                borderRadius: isFrame ? 12 / zoom : 8 / zoom,
                 boxShadow: isSelected
                   ? `0 0 0 1px ${cardBorder}40, 0 10px 30px rgba(0,0,0,0.6)`
                   : colorIdx > 0
@@ -919,6 +1072,9 @@ export function CanvasView() {
                 flexDirection: 'column',
                 overflow: 'visible',
                 transition: 'box-shadow 0.15s ease, border-color 0.15s ease, background-color 0.15s',
+                // frames must have lower zIndex and allow clicks inside to fall through
+                zIndex: isFrame ? 1 : 2,
+                pointerEvents: isFrame ? 'none' : 'auto',
               }}
               onClick={e => {
                 e.stopPropagation();
@@ -933,8 +1089,8 @@ export function CanvasView() {
               onMouseEnter={() => setHoveredCard(card.id)}
               onMouseLeave={() => setHoveredCard(null)}
             >
-              {/* ─── Connection Anchor Dots (Visible on hover) ─── */}
-              {edges.map(side => (
+              {/* ─── Connection Anchor Dots (Visible on hover; Frame cards don't have anchor dots!) ─── */}
+              {!isFrame && edges.map(side => (
                 <div
                   key={side}
                   style={getAnchorDotStyle(side)}
@@ -959,7 +1115,7 @@ export function CanvasView() {
                   {/* Bottom-Left handle */}
                   <div style={{ position: 'absolute', bottom: -4, left: -4, width: 7, height: 7, background: cardBorder, border: '1px solid #fff', borderRadius: 1 }} />
                   {/* Bottom-Right active handle */}
-                  <div style={{ position: 'absolute', bottom: -4, right: -4, width: 7, height: 7, background: cardBorder, border: '1px solid #fff', borderRadius: 1, zIndex: 11 }} />
+                  <div style={{ position: 'absolute', bottom: -4, right: -4, width: 7, height: 7, background: cardBorder, border: '1px solid #fff', borderRadius: 1, zIndex: 11, pointerEvents: 'auto' }} />
                   {/* Top Center handle */}
                   <div style={{ position: 'absolute', top: -4, left: '50%', transform: 'translateX(-50%)', width: 6, height: 6, background: cardBorder, border: '1px solid #fff', borderRadius: 1 }} />
                   {/* Bottom Center handle */}
@@ -990,6 +1146,7 @@ export function CanvasView() {
                     gap: 6,
                     zIndex: 25,
                     boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                    pointerEvents: 'auto',
                   }}
                 >
                   {/* Color presets */}
@@ -1065,28 +1222,37 @@ export function CanvasView() {
                 </div>
               )}
 
-              {/* ─── Card Header ─── */}
+              {/* ─── Card Header (Dragging is handled here) ─── */}
               <div
                 onMouseDown={e => {
                   e.stopPropagation();
                   setSelectedCard(card.id);
                   pushHistorySnapshot(); // Snapshot card position before moving
+                  
+                  // Compute all card IDs enclosed inside this frame card's box boundaries to translate them as well!
+                  const isFrameDrag = card.id.startsWith('frame');
+                  const enclosed = isFrameDrag 
+                    ? cards.filter(c => c.id !== card.id && c.x >= card.x && (c.x + c.w) <= (card.x + card.w) && c.y >= card.y && (c.y + c.h) <= (card.y + card.h)).map(c => c.id)
+                    : [];
+                  
                   dragRef.current = {
                     id: card.id,
                     offsetX: e.clientX - pan.x - card.x * zoom,
                     offsetY: e.clientY - pan.y - card.y * zoom,
+                    enclosedCardIds: enclosed,
                   };
                 }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: '6px 8px',
-                  borderBottom: '1px solid rgba(255,255,255,0.04)',
+                  padding: isFrame ? '4px 6px' : '6px 8px',
+                  borderBottom: isFrame ? 'none' : '1px solid rgba(255,255,255,0.04)',
                   cursor: 'grab',
-                  background: 'rgba(0,0,0,0.12)',
+                  background: isFrame ? 'none' : 'rgba(0,0,0,0.12)',
                   flexShrink: 0,
-                  borderRadius: '7px 7px 0 0',
+                  borderRadius: isFrame ? '11px 11px 0 0' : '7px 7px 0 0',
+                  pointerEvents: 'auto', // Re-enable click actions for drag on Frame header
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
@@ -1099,16 +1265,37 @@ export function CanvasView() {
                       <circle cx="8.5" cy="8.5" r="1.5" />
                       <polyline points="21 15 16 10 5 21" />
                     </svg>
+                  ) : isFrame ? (
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={colorIdx > 0 ? cardColor.border : '#e2b659'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                      <line x1="9" y1="3" x2="9" y2="21" />
+                    </svg>
                   ) : (
                     <Type size={11} style={{ color: colorIdx > 0 ? cardColor.border : '#00a8ff', flexShrink: 0 }} />
                   )}
-                  <span style={{
-                    fontSize: 11, fontWeight: 500,
-                    color: isActive ? '#ffffff' : textSecondary,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {titleLine}
-                  </span>
+                  
+                  {isFrame ? (
+                    // Flat inline editable input for naming Frame Groups
+                    <input
+                      value={card.content || 'Group Frame'}
+                      onChange={e => updateCard(card.id, { content: e.target.value })}
+                      onMouseDown={e => e.stopPropagation()}
+                      placeholder="Name Frame Group..."
+                      style={{
+                        background: 'none', border: 'none', outline: 'none',
+                        color: isSelected ? '#ffffff' : textSecondary, fontSize: 11.5, fontWeight: 600,
+                        width: '100%', fontFamily: 'inherit', padding: '2px 0',
+                      }}
+                    />
+                  ) : (
+                    <span style={{
+                      fontSize: 11, fontWeight: 500,
+                      color: isActive ? '#ffffff' : textSecondary,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {titleLine}
+                    </span>
+                  )}
                 </div>
                 
                 {/* Minimal top card corner details */}
@@ -1121,43 +1308,46 @@ export function CanvasView() {
               </div>
 
               {/* ─── Card Body Content ─── */}
-              <div style={{ padding: isImage ? 0 : '8px 10px', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                {isNote ? (
-                  <div style={{
-                    fontSize: 11.5, color: textSecondary, lineHeight: 1.5,
-                    whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowY: 'auto',
-                    fontFamily: 'Inter, -apple-system, sans-serif',
-                    paddingRight: 4,
-                  }} className="canvas-card-scroll">
-                    {previewLines ? (
-                      previewLines.slice(0, 300) + (previewLines.length > 300 ? '...' : '')
-                    ) : (
-                      <span style={{ color: textMuted, fontStyle: 'italic' }}>Empty note file</span>
-                    )}
-                  </div>
-                ) : isImage ? (
-                  <ImageCardBody 
-                    card={card} 
-                    zoom={zoom} 
-                    updateCard={updateCard} 
-                    pushHistorySnapshot={pushHistorySnapshot} 
-                  />
-                ) : (
-                  <textarea
-                    value={card.content || ''}
-                    onChange={e => updateCard(card.id, { content: e.target.value })}
-                    onMouseDown={e => e.stopPropagation()}
-                    placeholder="Write anything..."
-                    style={{
-                      flex: 1, width: '100%', background: 'none', border: 'none', outline: 'none',
-                      color: textPrimary, fontSize: 12, resize: 'none',
+              {/* Frames do not render a content body; they let notes inside them show through */}
+              {!isFrame && (
+                <div style={{ padding: isImage ? 0 : '8px 10px', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                  {isNote ? (
+                    <div style={{
+                      fontSize: 11.5, color: textSecondary, lineHeight: 1.5,
+                      whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowY: 'auto',
                       fontFamily: 'Inter, -apple-system, sans-serif',
-                      lineHeight: 1.5, minHeight: 60,
-                      padding: 0, margin: 0,
-                    }}
-                  />
-                )}
-              </div>
+                      paddingRight: 4,
+                    }} className="canvas-card-scroll">
+                      {previewLines ? (
+                        previewLines.slice(0, 300) + (previewLines.length > 300 ? '...' : '')
+                      ) : (
+                        <span style={{ color: textMuted, fontStyle: 'italic' }}>Empty note file</span>
+                      )}
+                    </div>
+                  ) : isImage ? (
+                    <ImageCardBody 
+                      card={card} 
+                      zoom={zoom} 
+                      updateCard={updateCard} 
+                      pushHistorySnapshot={pushHistorySnapshot} 
+                    />
+                  ) : (
+                    <textarea
+                      value={card.content || ''}
+                      onChange={e => updateCard(card.id, { content: e.target.value })}
+                      onMouseDown={e => e.stopPropagation()}
+                      placeholder="Write anything..."
+                      style={{
+                        flex: 1, width: '100%', background: 'none', border: 'none', outline: 'none',
+                        color: textPrimary, fontSize: 12, resize: 'none',
+                        fontFamily: 'Inter, -apple-system, sans-serif',
+                        lineHeight: 1.5, minHeight: 60,
+                        padding: 0, margin: 0,
+                      }}
+                    />
+                  )}
+                </div>
+              )}
 
               {/* ─── Resizing Node Handle (Bottom Right) ─── */}
               <div
@@ -1170,6 +1360,7 @@ export function CanvasView() {
                   position: 'absolute', bottom: 0, right: 0, width: 14, height: 14,
                   cursor: 'nwse-resize', zIndex: 12, opacity: hoveredCard === card.id || isSelected ? 0.75 : 0,
                   transition: 'opacity 0.15s ease', display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end', padding: 2,
+                  pointerEvents: 'auto', // Re-enable pointer events for Frame resize handle drag
                 }}
               >
                 <svg width={7} height={7} viewBox="0 0 10 10">
@@ -1231,7 +1422,7 @@ export function CanvasView() {
                 strokeDasharray={`${6 / zoom} ${3 / zoom}`}
                 fill="none"
                 strokeOpacity={0.8}
-                markerEnd="url(#arrow-drag-preview)"
+                markerEnd={showArrows ? 'url(#arrow-drag-preview)' : undefined}
                 style={{ pointerEvents: 'none' }}
               />
             );
@@ -1335,7 +1526,7 @@ export function CanvasView() {
             fontSize: 10.5, color: textSecondary, background: 'rgba(255,255,255,0.03)',
             padding: '2px 8px', borderRadius: 4, border: `1px solid #232326`,
           }}>
-            {filteredCards.length} cards · {wikilinkEdges.length + connections.length} links
+            {filteredCards.length} nodes · {wikilinkEdges.length + connections.length} links
           </span>
         </div>
 
@@ -1548,6 +1739,24 @@ export function CanvasView() {
 
           <div style={{ height: 16, width: 1, background: 'rgba(255,255,255,0.08)' }} />
 
+          {/* Dynamic Arrow Toggle Checkbox */}
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: 5, fontSize: 11,
+            color: textSecondary, cursor: 'pointer', padding: '0 8px', userSelect: 'none',
+          }}>
+            <input
+              type="checkbox"
+              checked={showArrows}
+              onChange={e => setShowArrows(e.target.checked)}
+              style={{
+                cursor: 'pointer', accentColor: '#7f6df2', width: 12, height: 12,
+              }}
+            />
+            <span>Arrows</span>
+          </label>
+
+          <div style={{ height: 16, width: 1, background: 'rgba(255,255,255,0.08)' }} />
+
           {/* Clear Canvas Action */}
           <button
             onClick={resetLayout}
@@ -1650,11 +1859,11 @@ export function CanvasView() {
         fontSize: 9.5, color: textMuted, display: 'flex', gap: 8, pointerEvents: 'none', whiteSpace: 'nowrap', zIndex: 10,
         background: 'rgba(15,15,17,0.35)', padding: '2px 8px', borderRadius: 4, backdropFilter: 'blur(4px)',
       }}>
-        <span>Scroll to pan</span> <span>·</span>
-        <span>Ctrl+Scroll to zoom</span> <span>·</span>
-        <span>Right-Click line for options</span> <span>·</span>
+        <span>Drag Empty Canvas to Frame Select</span> <span>·</span>
+        <span>Right-Click/Middle-Click Drag to Pan</span> <span>·</span>
+        <span>Right-Click line for menu</span> <span>·</span>
         <span>Ctrl+Z to Undo</span> <span>·</span>
-        <span>ESC to cancel/deselect</span>
+        <span>ESC to cancel</span>
       </div>
 
       {/* ─── Global Scrollbar CSS Styling injection ─── */}
