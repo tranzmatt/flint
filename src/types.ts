@@ -107,6 +107,7 @@ export interface AppState {
   rightPanelOpen: boolean;
   showGraphView: boolean;
   showCanvasView: boolean;
+  showDailyNote: boolean;
   showSearch: boolean;
   showCommandPalette: boolean;
   settingsOpen: boolean;
