@@ -5,7 +5,6 @@ import { Grip, RotateCcw, Search, X, Plus, Type, Trash2, FileText } from 'lucide
 import type { CanvasCard } from '../types';
 
 // ─── Persistence ──────────────────────────────────────────────────────────────
-
 function getCanvasKey(vaultId: string | null) {
   return `flint-canvas-state-${vaultId || 'default'}`;
 }
@@ -41,34 +40,31 @@ function saveCanvasState(vaultId: string | null, data: CanvasPersistedState) {
 }
 
 // ─── Card color palette (Obsidian-style) ──────────────────────────────────────
-
 const CARD_COLORS = [
-  { label: 'Default', border: '#2e2e2e', glow: '' },
-  { label: 'Red',     border: '#e5555a', glow: 'rgba(229,85,90,0.2)' },
-  { label: 'Orange',  border: '#e68a00', glow: 'rgba(230,138,0,0.2)' },
-  { label: 'Yellow',  border: '#c9b400', glow: 'rgba(201,180,0,0.2)' },
-  { label: 'Green',   border: '#43a047', glow: 'rgba(67,160,71,0.2)' },
-  { label: 'Cyan',    border: '#00acc1', glow: 'rgba(0,172,193,0.2)' },
-  { label: 'Purple',  border: '#7f6df2', glow: 'rgba(127,109,242,0.2)' },
-  { label: 'Pink',    border: '#e040a0', glow: 'rgba(224,64,160,0.2)' },
+  { label: 'Default', border: '#484848', bg: '#262626', headerBg: '#1e1e1e', glow: '' },
+  { label: 'Red', border: '#a63d40', bg: '#2a1f1f', headerBg: '#231a1a', glow: 'rgba(166,61,64,0.08)' },
+  { label: 'Orange', border: '#b5722a', bg: '#2a2319', headerBg: '#231d15', glow: 'rgba(181,114,42,0.08)' },
+  { label: 'Yellow', border: '#a89a2a', bg: '#28271a', headerBg: '#222116', glow: 'rgba(168,154,42,0.08)' },
+  { label: 'Green', border: '#3b8a3e', bg: '#1c2a1d', headerBg: '#182318', glow: 'rgba(59,138,62,0.08)' },
+  { label: 'Cyan', border: '#1a8a9a', bg: '#1a2729', headerBg: '#162123', glow: 'rgba(26,138,154,0.08)' },
+  { label: 'Purple', border: '#7b5fc7', bg: '#231f2e', headerBg: '#1e1a28', glow: 'rgba(123,95,199,0.08)' },
+  { label: 'Pink', border: '#b84a8a', bg: '#2a1d26', headerBg: '#231821', glow: 'rgba(184,74,138,0.08)' },
 ];
 
 // ─── Connection colors ────────────────────────────────────────────────────────
-
 const CONN_COLORS = [
-  '#7f6df2', '#e5555a', '#43a047', '#00acc1', '#e68a00', '#c9b400', '#e040a0', '#dcddde', '#555555',
+  '#8b7ec8', '#a63d40', '#3b8a3e', '#1a8a9a', '#b5722a', '#a89a2a', '#b84a8a', '#888888', '#555555',
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
 type Side = 'top' | 'right' | 'bottom' | 'left';
 
 function getSidePt(card: CanvasCard, side: Side) {
   switch (side) {
-    case 'top':    return { x: card.x + card.w / 2,  y: card.y };
-    case 'bottom': return { x: card.x + card.w / 2,  y: card.y + card.h };
-    case 'left':   return { x: card.x,               y: card.y + card.h / 2 };
-    case 'right':  return { x: card.x + card.w,      y: card.y + card.h / 2 };
+    case 'top': return { x: card.x + card.w / 2, y: card.y };
+    case 'bottom': return { x: card.x + card.w / 2, y: card.y + card.h };
+    case 'left': return { x: card.x, y: card.y + card.h / 2 };
+    case 'right': return { x: card.x + card.w, y: card.y + card.h / 2 };
   }
 }
 
@@ -108,12 +104,11 @@ function smartBezier(
   const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
   const offset = Math.min(dist * 0.5, 80);
   const c1 = getControlPt(p1, s1, offset);
-  
+
   if (!s2) {
-    // Floating endpoint while dragging
     return `M ${p1.x} ${p1.y} C ${c1.x} ${c1.y}, ${p2.x} ${p2.y}, ${p2.x} ${p2.y}`;
   }
-  
+
   const c2 = getControlPt(p2, s2, offset);
   return `M ${p1.x} ${p1.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${p2.x} ${p2.y}`;
 }
@@ -141,13 +136,11 @@ function findNearestAnchor(
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-
 export function CanvasView() {
   const { state, dispatch } = useStore();
   const [query, setQuery] = useState('');
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  
   const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null);
   const resizeRef = useRef<{ id: string; startX: number; startY: number; startW: number; startH: number } | null>(null);
   const canvasDragRef = useRef<{ x: number; y: number } | null>(null);
@@ -159,7 +152,7 @@ export function CanvasView() {
     my: number;
     toSide: Side | null;
   } | null>(null);
-  
+
   const [connDrag, setConnDrag] = useState<{
     fromCard: string;
     fromSide: Side;
@@ -167,19 +160,15 @@ export function CanvasView() {
     my: number;
     toSide: Side | null;
   } | null>(null);
-  
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const [snapTarget, setSnapTarget] = useState<{ cardId: string; side: Side } | null>(null);
   const [selectedConnColor, setSelectedConnColor] = useState<string>(CONN_COLORS[0]);
   const [hoveredConn, setHoveredConn] = useState<string | null>(null);
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null);
-  
-  // Note adding dropdown
-  const [notePickerOpen, setNotePickerOpen] = useState(false);
-  const [noteSearch, setNoteSearch] = useState('');
 
   const activeVaultId = state.activeVaultId;
+
   const [connections, setConnections] = useState<CanvasConnection[]>(
     () => loadCanvasState(activeVaultId).connections
   );
@@ -228,9 +217,10 @@ export function CanvasView() {
 
   const wikilinkEdges = useMemo(() => {
     const filteredIds = new Set(filteredCards.map(c => c.id));
-    const noteTitleIdMap = new Map(state.notes.map(note => [note.title.toLowerCase(), note.id] as [string, string]));
+    const noteTitleIdMap = new Map(state.notes.map(note => [note.title.toLowerCase(), note.id]));
     const pairs = new Set<string>();
     const list: Array<{ from: string; to: string }> = [];
+
     filteredCards.forEach(card => {
       if (card.type !== 'note' || !card.noteId) return;
       const note = state.notes.find(n => n.id === card.noteId);
@@ -266,21 +256,6 @@ export function CanvasView() {
     setSelectedCard(newCard.id);
   };
 
-  const addNoteCard = (noteId: string) => {
-    const newCard: CanvasCard = {
-      id: `note-card-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      type: 'note',
-      noteId,
-      x: Math.round(((window.innerWidth / 2 - pan.x) / zoom) / 20) * 20,
-      y: Math.round(((window.innerHeight / 2 - pan.y) / zoom) / 20) * 20,
-      w: 280,
-      h: 220,
-    };
-    updateCards([...cards, newCard]);
-    setSelectedCard(newCard.id);
-    setNotePickerOpen(false);
-  };
-
   const deleteCard = (id: string) => {
     updateCards(cards.filter(c => c.id !== id));
     setConnections(prev => prev.filter(c => c.fromCard !== id && c.toCard !== id));
@@ -304,7 +279,6 @@ export function CanvasView() {
         }
         setSelectedCard(null);
         setColorPickerOpen(null);
-        setNotePickerOpen(false);
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCard) {
         const tag = (e.target as HTMLElement).tagName;
@@ -312,6 +286,7 @@ export function CanvasView() {
         deleteCard(selectedCard);
       }
     };
+
     const handleContextMenu = (e: MouseEvent) => {
       if (connDragRef.current) {
         e.preventDefault();
@@ -320,6 +295,7 @@ export function CanvasView() {
         setSnapTarget(null);
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('contextmenu', handleContextMenu);
     return () => {
@@ -354,8 +330,6 @@ export function CanvasView() {
       const rect = containerRef.current!.getBoundingClientRect();
       const mx = (e.clientX - rect.left - pan.x) / zoom;
       const my = (e.clientY - rect.top - pan.y) / zoom;
-      
-      // Magnetic snap: find nearest anchor dot on any other card
       const anchor = findNearestAnchor(mx, my, filteredCards, connDragRef.current.fromCard, 30 / zoom);
       if (anchor) {
         connDragRef.current = { ...connDragRef.current, mx: anchor.pt.x, my: anchor.pt.y, toSide: anchor.side };
@@ -399,7 +373,6 @@ export function CanvasView() {
     if (e.target !== e.currentTarget) return;
     setColorPickerOpen(null);
     setSelectedCard(null);
-    setNotePickerOpen(false);
     canvasDragRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
     if (containerRef.current) containerRef.current.style.cursor = 'grabbing';
   };
@@ -432,38 +405,40 @@ export function CanvasView() {
     }
   };
 
-  // Zoom helpers
-  const zoomIn = () => setZoom(z => Math.min(4, z * 1.15));
-  const zoomOut = () => setZoom(z => Math.max(0.15, z / 1.15));
-  const resetZoom = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  };
-
   const findCard = (id: string) => filteredCards.find(c => c.id === id);
 
-  const accentColor = '#7f6df2'; // Obsidian Purple Accent
-  const canvasBg = '#0f0f11'; // Pure Obsidian Dark Canvas BG
-  const cardBg = '#18181a'; // Obsidian deep dark matte card BG
-  const cardBgActive = '#1d1d21'; // Highlighted Obsidian card BG
-  const cardBorderDefault = '#2a2a2c'; // Extremely subtle border
-  const textPrimary = '#e3e3e3'; // Obsidian-standard main white text
-  const textSecondary = '#b3b3b3'; // Gray text
-  const textMuted = '#666668'; // Muted dark grey
-
-  // Note Search Filtering
-  const filteredNotes = useMemo(() => {
-    if (!noteSearch.trim()) return state.notes;
-    return state.notes.filter(note => 
-      note.title.toLowerCase().includes(noteSearch.toLowerCase()) ||
-      note.content.toLowerCase().includes(noteSearch.toLowerCase())
-    );
-  }, [state.notes, noteSearch]);
+  // ─── Obsidian Theme Tokens ────────────────────────────────────────────────
+  const obsidian = {
+    canvasBg: '#202020',
+    dotColor: 'rgba(255,255,255,0.035)',
+    cardBg: '#262626',
+    cardBgHover: '#2c2c2c',
+    cardHeaderBg: '#1e1e1e',
+    cardBorder: '#383838',
+    cardBorderSelected: '#7b6fc7',
+    cardBorderSelectedGlow: 'rgba(123,111,199,0.25)',
+    cardRadius: 6,
+    textPrimary: '#dcddde',
+    textSecondary: '#a7a7a7',
+    textMuted: '#5c5c5c',
+    textFaint: '#444',
+    accentColor: '#7b6fc7',
+    accentColorDim: 'rgba(123,111,199,0.5)',
+    accentBg: 'rgba(123,111,199,0.08)',
+    dangerColor: '#c74e4e',
+    toolbarBg: '#1a1a1a',
+    toolbarBorder: '#2e2e2e',
+    inputBg: '#2a2a2a',
+    inputBorder: '#3a3a3a',
+    anchorDot: '#7b6fc7',
+    anchorDotBg: 'rgba(123,111,199,0.35)',
+    shadow: '0 2px 12px rgba(0,0,0,0.5)',
+    shadowLg: '0 8px 32px rgba(0,0,0,0.6)',
+  };
 
   const renderConnections = () => {
     const allEdges: JSX.Element[] = [];
-    
-    // Wiki links relationships between notes
+
     wikilinkEdges.forEach(edge => {
       const from = findCard(edge.from);
       const to = findCard(edge.to);
@@ -475,9 +450,9 @@ export function CanvasView() {
         <g key={`wiki-${edge.from}-${edge.to}`}>
           <path
             d={smartBezier(p1, fromSide, p2, toSide)}
-            stroke="rgba(127,109,242,0.22)"
-            strokeWidth={1.5 / zoom}
-            strokeDasharray={`${6 / zoom} ${4 / zoom}`}
+            stroke="#404040"
+            strokeWidth={1 / zoom}
+            strokeDasharray={`${4 / zoom} ${4 / zoom}`}
             fill="none"
             style={{ pointerEvents: 'none' }}
           />
@@ -485,63 +460,58 @@ export function CanvasView() {
       );
     });
 
-    // Explicit manual arrow connections
     connections.forEach(conn => {
       const from = findCard(conn.fromCard);
       const to = findCard(conn.toCard);
       if (!from || !to) return;
       const p1 = getSidePt(from, conn.fromSide);
       const p2 = getSidePt(to, conn.toSide);
-      const color = conn.color || accentColor;
+      const color = conn.color || obsidian.accentColor;
       const midX = (p1.x + p2.x) / 2;
       const midY = (p1.y + p2.y) / 2;
-      
+      const isHovered = hoveredConn === conn.id;
+
       allEdges.push(
         <g key={conn.id}>
-          {/* Broad transparent path to capture mouse hover easily */}
           <path
             d={smartBezier(p1, conn.fromSide, p2, conn.toSide)}
             stroke="transparent"
-            strokeWidth={14 / zoom}
+            strokeWidth={16 / zoom}
             fill="none"
             style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
             onMouseEnter={() => setHoveredConn(conn.id)}
             onMouseLeave={() => setHoveredConn(null)}
           />
-          {/* Main visual connection path */}
           <path
             d={smartBezier(p1, conn.fromSide, p2, conn.toSide)}
             stroke={color}
-            strokeWidth={hoveredConn === conn.id ? 2.5 / zoom : 1.8 / zoom}
+            strokeWidth={isHovered ? 2.2 / zoom : 1.5 / zoom}
             fill="none"
-            strokeOpacity={0.85}
+            strokeOpacity={isHovered ? 1 : 0.6}
             markerEnd={`url(#arrow-${color.replace('#', '')})`}
-            style={{ pointerEvents: 'none', transition: 'stroke-width 0.1s ease' }}
+            style={{ pointerEvents: 'none', transition: 'stroke-opacity 0.15s' }}
           />
-          {/* Floating Midpoint Menu for hovered connection line */}
-          {hoveredConn === conn.id && (
+          {isHovered && (
             <g transform={`translate(${midX}, ${midY})`} style={{ pointerEvents: 'auto' }}>
-              {/* Delete Button */}
               <g
-                transform={`translate(${-12 / zoom}, 0)`}
+                transform={`translate(${-10 / zoom}, 0)`}
                 style={{ cursor: 'pointer' }}
                 onClick={() => deleteConnection(conn.id)}
               >
-                <circle r={9 / zoom} fill="#18181a" stroke={color} strokeWidth={1.5 / zoom} />
+                <circle r={7 / zoom} fill={obsidian.toolbarBg} stroke={color} strokeWidth={1 / zoom} />
                 <text
-                  x={0} y={1 / zoom}
+                  x={0} y={0.5}
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  fontSize={10 / zoom}
-                  fill="#ffffff"
-                  style={{ userSelect: 'none', pointerEvents: 'none', fontWeight: 'bold' }}
+                  fontSize={9 / zoom}
+                  fill={color}
+                  style={{ userSelect: 'none', pointerEvents: 'none' }}
                 >
                   ×
                 </text>
               </g>
-              {/* Cycle Connection Color Button */}
               <g
-                transform={`translate(${12 / zoom}, 0)`}
+                transform={`translate(${10 / zoom}, 0)`}
                 style={{ cursor: 'pointer' }}
                 onClick={() => {
                   const idx = CONN_COLORS.indexOf(conn.color || CONN_COLORS[0]);
@@ -549,41 +519,48 @@ export function CanvasView() {
                   setConnections(prev => prev.map(c => c.id === conn.id ? { ...c, color: nextColor } : c));
                 }}
               >
-                <circle r={9 / zoom} fill="#18181a" stroke={color} strokeWidth={1.5 / zoom} />
-                <circle r={4.5 / zoom} fill={color} />
+                <circle r={7 / zoom} fill={obsidian.toolbarBg} stroke={color} strokeWidth={1 / zoom} />
+                <circle r={3.5 / zoom} fill={color} />
               </g>
             </g>
           )}
         </g>
       );
     });
-    
+
     return allEdges;
   };
 
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 animate-fade-in overflow-hidden select-none"
-      style={{ zIndex: 110, background: canvasBg, fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 110,
+        background: obsidian.canvasBg,
+        overflow: 'hidden',
+        userSelect: 'none',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif',
+      }}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
       onWheel={handleWheel}
     >
-      {/* ─── Infinite Grid Background ─── */}
+      {/* ─── Dot Grid Background ─── */}
       <div
         style={{
           position: 'absolute',
           inset: 0,
-          backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.065) 1.2px, transparent 1.2px)`,
+          backgroundImage: `radial-gradient(circle, ${obsidian.dotColor} 1px, transparent 1px)`,
           backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
           backgroundPosition: `${pan.x % (20 * zoom)}px ${pan.y % (20 * zoom)}px`,
           pointerEvents: 'none',
         }}
       />
 
-      {/* ─── Cards Viewport Layer ─── */}
+      {/* ─── Canvas Transform Layer (Cards) ─── */}
       <div
         style={{
           position: 'absolute',
@@ -598,57 +575,55 @@ export function CanvasView() {
           const isNote = card.type === 'note';
           const note = isNote ? state.notes.find(n => n.id === card.noteId) : null;
           const isActive = isNote && note?.id === state.activeNoteId;
-          
           const previewLines = isNote && note
-            ? note.content.split('\n').filter(line => line.trim() && !line.startsWith('#')).slice(0, 10).join('\n')
+            ? note.content.split('\n').filter(line => line.trim() && !line.startsWith('#')).slice(0, 6).join('\n')
             : '';
-            
           const titleLine = isNote && note
             ? note.content.split('\n').find(l => l.startsWith('# '))?.replace(/^# /, '') || note.title
-            : 'Text Card';
-            
+            : '';
           const colorIdx = cardColors[card.id] ?? 0;
           const cardColor = CARD_COLORS[colorIdx];
-          const isColorPickerOpen = colorPickerOpen === card.id;
           const isSelected = selectedCard === card.id;
-          
-          const cardBorder = isSelected 
-            ? (colorIdx > 0 ? cardColor.border : accentColor)
-            : isActive 
-            ? accentColor 
-            : colorIdx > 0 
-            ? cardColor.border 
-            : cardBorderDefault;
-            
+          const isColorPickerOpen = colorPickerOpen === card.id;
+          const isHovered = hoveredCard === card.id;
+
+          const borderColor = isSelected
+            ? obsidian.cardBorderSelected
+            : isActive
+            ? obsidian.accentColor
+            : colorIdx > 0
+            ? cardColor.border
+            : obsidian.cardBorder;
+
+          const bgColor = colorIdx > 0 ? cardColor.bg : obsidian.cardBg;
+          const headerBgColor = colorIdx > 0 ? cardColor.headerBg : obsidian.cardHeaderBg;
+
           const edges: Side[] = ['top', 'right', 'bottom', 'left'];
-          
+
           const getAnchorDotStyle = (side: Side): React.CSSProperties => {
-            const dotSize = 10 / zoom;
+            const dotSize = 8 / zoom;
             const isSnapped = snapTarget?.cardId === card.id && snapTarget?.side === side;
             const isSource = connDrag?.fromCard === card.id && connDrag?.fromSide === side;
-            const isVisible = hoveredCard === card.id || connDrag !== null;
-            const isAnchorActive = isSnapped || isSource;
-            const finalSize = isAnchorActive ? dotSize * 1.5 : dotSize;
-            
-            const dotBorderColor = isAnchorActive ? '#ffffff' : (colorIdx > 0 ? cardColor.border : 'rgba(127,109,242,0.8)');
-            const dotBg = isAnchorActive ? accentColor : '#18181a';
-            
+            const showDots = isHovered || connDrag !== null;
+            const isDotActive = isSnapped || isSource;
+            const finalSize = isDotActive ? dotSize * 1.6 : dotSize;
+
             const base: React.CSSProperties = {
               position: 'absolute',
               width: finalSize,
               height: finalSize,
               borderRadius: '50%',
-              background: dotBg,
-              border: `${1.5 / zoom}px solid ${dotBorderColor}`,
+              background: isDotActive ? obsidian.accentColor : obsidian.anchorDotBg,
+              border: `${1.5 / zoom}px solid ${isDotActive ? '#fff' : obsidian.accentColorDim}`,
               cursor: 'crosshair',
-              zIndex: 12,
-              opacity: isVisible || isAnchorActive ? 1 : 0,
-              transition: 'opacity 0.15s ease, transform 0.1s ease, width 0.1s ease, height 0.1s ease',
+              zIndex: 10,
+              opacity: showDots || isDotActive ? 1 : 0,
+              transition: 'all 0.18s ease',
               transform: 'translate(-50%, -50%)',
-              boxShadow: isAnchorActive
-                ? `0 0 ${8 / zoom}px ${accentColor}, 0 0 ${16 / zoom}px rgba(127,109,242,0.4)`
-                : `0 2px ${5 / zoom}px rgba(0,0,0,0.5)`,
-              pointerEvents: isVisible || isAnchorActive ? 'auto' : 'none',
+              boxShadow: isDotActive
+                ? `0 0 ${6 / zoom}px ${obsidian.accentColor}`
+                : 'none',
+              pointerEvents: showDots || isDotActive ? 'auto' : 'none',
             };
             if (side === 'top') return { ...base, top: 0, left: '50%' };
             if (side === 'bottom') return { ...base, top: '100%', left: '50%' };
@@ -664,19 +639,19 @@ export function CanvasView() {
                 left: card.x,
                 top: card.y,
                 width: card.w,
-                height: card.h,
-                background: isActive ? cardBgActive : cardBg,
-                border: `${isSelected ? 2 : 1.5}px solid ${cardBorder}`,
-                borderRadius: 8 / zoom,
+                minHeight: card.h,
+                background: bgColor,
+                border: `${isSelected ? 1.5 : 1}px solid ${borderColor}`,
+                borderRadius: obsidian.cardRadius / zoom,
                 boxShadow: isSelected
-                  ? `0 0 0 1px ${cardBorder}40, 0 10px 30px rgba(0,0,0,0.6)`
-                  : colorIdx > 0
-                  ? `0 4px 20px ${cardColor.glow}, 0 4px 20px rgba(0,0,0,0.4)`
-                  : '0 4px 20px rgba(0,0,0,0.4)',
+                  ? `0 0 0 ${1 / zoom}px ${obsidian.cardBorderSelectedGlow}, ${obsidian.shadow}`
+                  : isHovered
+                  ? `0 4px 16px rgba(0,0,0,0.45)`
+                  : `0 2px 8px rgba(0,0,0,0.35)`,
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'visible',
-                transition: 'box-shadow 0.15s ease, border-color 0.15s ease, background-color 0.15s',
+                transition: 'box-shadow 0.15s ease, border-color 0.15s ease',
               }}
               onClick={e => {
                 e.stopPropagation();
@@ -684,14 +659,12 @@ export function CanvasView() {
                 setColorPickerOpen(null);
               }}
               onDoubleClick={() => {
-                if (isNote && card.noteId) {
-                  dispatch({ type: 'OPEN_TAB', payload: card.noteId });
-                }
+                if (isNote && card.noteId) dispatch({ type: 'OPEN_TAB', payload: card.noteId });
               }}
               onMouseEnter={() => setHoveredCard(card.id)}
               onMouseLeave={() => setHoveredCard(null)}
             >
-              {/* ─── Connection Anchor Dots (Visible on hover) ─── */}
+              {/* Anchor dots */}
               {edges.map(side => (
                 <div
                   key={side}
@@ -706,119 +679,6 @@ export function CanvasView() {
                   }}
                 />
               ))}
-
-              {/* ─── Aesthetic Resizing Handles (Obsidian-Style border nodes when selected) ─── */}
-              {isSelected && (
-                <>
-                  {/* Top-Left handle */}
-                  <div style={{ position: 'absolute', top: -4, left: -4, width: 7, height: 7, background: cardBorder, border: '1px solid #fff', borderRadius: 1 }} />
-                  {/* Top-Right handle */}
-                  <div style={{ position: 'absolute', top: -4, right: -4, width: 7, height: 7, background: cardBorder, border: '1px solid #fff', borderRadius: 1 }} />
-                  {/* Bottom-Left handle */}
-                  <div style={{ position: 'absolute', bottom: -4, left: -4, width: 7, height: 7, background: cardBorder, border: '1px solid #fff', borderRadius: 1 }} />
-                  {/* Bottom-Right active handle */}
-                  <div style={{ position: 'absolute', bottom: -4, right: -4, width: 7, height: 7, background: cardBorder, border: '1px solid #fff', borderRadius: 1, zIndex: 11 }} />
-                  {/* Top Center handle */}
-                  <div style={{ position: 'absolute', top: -4, left: '50%', transform: 'translateX(-50%)', width: 6, height: 6, background: cardBorder, border: '1px solid #fff', borderRadius: 1 }} />
-                  {/* Bottom Center handle */}
-                  <div style={{ position: 'absolute', bottom: -4, left: '50%', transform: 'translateX(-50%)', width: 6, height: 6, background: cardBorder, border: '1px solid #fff', borderRadius: 1 }} />
-                  {/* Left Center handle */}
-                  <div style={{ position: 'absolute', left: -4, top: '50%', transform: 'translateY(-50%)', width: 6, height: 6, background: cardBorder, border: '1px solid #fff', borderRadius: 1 }} />
-                  {/* Right Center handle */}
-                  <div style={{ position: 'absolute', right: -4, top: '50%', transform: 'translateY(-50%)', width: 6, height: 6, background: cardBorder, border: '1px solid #fff', borderRadius: 1 }} />
-                </>
-              )}
-
-              {/* ─── Floating Card Context Menu (Centered above selected card) ─── */}
-              {isSelected && (
-                <div
-                  onMouseDown={e => e.stopPropagation()}
-                  onClick={e => e.stopPropagation()}
-                  style={{
-                    position: 'absolute',
-                    top: -46 / zoom,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    background: '#1d1d20',
-                    border: '1px solid #2e2e31',
-                    borderRadius: 6,
-                    padding: '4px 6px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    zIndex: 25,
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                  }}
-                >
-                  {/* Color presets */}
-                  <div style={{ display: 'flex', gap: 4, paddingRight: 4, borderRight: '1px solid #2e2e31' }}>
-                    {CARD_COLORS.map((col, idx) => (
-                      <button
-                        key={col.label}
-                        title={col.label}
-                        onClick={() => setCardColors(prev => ({ ...prev, [card.id]: idx }))}
-                        style={{
-                          width: 14,
-                          height: 14,
-                          borderRadius: '50%',
-                          background: idx === 0 ? 'rgba(255,255,255,0.15)' : col.border,
-                          cursor: 'pointer',
-                          border: colorIdx === idx ? '1.5px solid #ffffff' : '1px solid rgba(255,255,255,0.05)',
-                          boxShadow: colorIdx === idx ? `0 0 6px ${col.border}` : 'none',
-                          padding: 0,
-                          transition: 'transform 0.1s ease',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.15)'}
-                        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-                      />
-                    ))}
-                  </div>
-
-                  {/* Quick Action Buttons */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    {isNote && (
-                      <button
-                        onClick={() => dispatch({ type: 'OPEN_TAB', payload: card.noteId! })}
-                        title="Open full note file"
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: textSecondary,
-                          cursor: 'pointer',
-                          padding: 4,
-                          borderRadius: 4,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#ffffff'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary; }}
-                      >
-                        <Plus size={13} />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => deleteCard(card.id)}
-                      title="Delete card"
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: '#ff5f5f',
-                        cursor: 'pointer',
-                        padding: 4,
-                        borderRadius: 4,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,95,95,0.12)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {/* ─── Card Header ─── */}
               <div
@@ -835,52 +695,183 @@ export function CanvasView() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: '6px 8px',
-                  borderBottom: '1px solid rgba(255,255,255,0.04)',
+                  padding: `${5 / zoom}px ${10 / zoom}px`,
+                  borderBottom: `${1 / zoom}px solid rgba(255,255,255,0.04)`,
                   cursor: 'grab',
-                  background: 'rgba(0,0,0,0.12)',
+                  background: headerBgColor,
                   flexShrink: 0,
-                  borderRadius: '7px 7px 0 0',
+                  borderRadius: `${obsidian.cardRadius / zoom}px ${obsidian.cardRadius / zoom}px 0 0`,
+                  minHeight: 28 / zoom,
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
-                  <Grip size={11} style={{ color: textMuted, flexShrink: 0 }} />
-                  {isNote ? (
-                    <FileText size={11} style={{ color: colorIdx > 0 ? cardColor.border : '#8c7ae6', flexShrink: 0 }} />
-                  ) : (
-                    <Type size={11} style={{ color: colorIdx > 0 ? cardColor.border : '#00a8ff', flexShrink: 0 }} />
+                <div style={{
+                  display: 'flex', alignItems: 'center',
+                  gap: 6 / zoom, minWidth: 0, flex: 1
+                }}>
+                  <Grip
+                    size={10 / zoom}
+                    style={{ color: obsidian.textFaint, flexShrink: 0, opacity: 0.5 }}
+                  />
+                  {isNote && (
+                    <FileText
+                      size={11 / zoom}
+                      style={{ color: obsidian.textMuted, flexShrink: 0 }}
+                    />
+                  )}
+                  {!isNote && (
+                    <Type
+                      size={11 / zoom}
+                      style={{ color: obsidian.textMuted, flexShrink: 0 }}
+                    />
                   )}
                   <span style={{
-                    fontSize: 11, fontWeight: 500,
-                    color: isActive ? '#ffffff' : textSecondary,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    fontSize: 12 / zoom,
+                    fontWeight: 500,
+                    color: isActive ? obsidian.textPrimary : obsidian.textSecondary,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    letterSpacing: '-0.01em',
                   }}>
-                    {titleLine}
+                    {isNote ? titleLine : 'Text'}
                   </span>
                 </div>
-                
-                {/* Minimal top card corner details */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                  <div style={{
-                    width: 7, height: 7, borderRadius: '50%',
-                    background: colorIdx > 0 ? cardColor.border : 'rgba(255,255,255,0.12)',
-                  }} />
+
+                {/* Header actions - only show on hover */}
+                <div style={{
+                  display: 'flex', alignItems: 'center',
+                  gap: 1 / zoom, flexShrink: 0,
+                  opacity: isHovered || isSelected ? 1 : 0,
+                  transition: 'opacity 0.15s ease',
+                }}>
+                  {/* Color dot */}
+                  <button
+                    onMouseDown={e => e.stopPropagation()}
+                    onClick={e => {
+                      e.stopPropagation();
+                      setColorPickerOpen(prev => prev === card.id ? null : card.id);
+                    }}
+                    title="Card color"
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      padding: `${3 / zoom}px`, display: 'flex',
+                      borderRadius: 3 / zoom,
+                    }}
+                  >
+                    <div style={{
+                      width: 10 / zoom, height: 10 / zoom, borderRadius: '50%',
+                      background: colorIdx > 0 ? cardColor.border : 'rgba(255,255,255,0.2)',
+                      border: `${1 / zoom}px solid rgba(255,255,255,0.1)`,
+                    }} />
+                  </button>
+                  {isNote && (
+                    <button
+                      onMouseDown={e => e.stopPropagation()}
+                      onClick={e => {
+                        e.stopPropagation();
+                        dispatch({ type: 'OPEN_TAB', payload: card.noteId! });
+                      }}
+                      title="Open note"
+                      style={{
+                        background: 'none', border: 'none',
+                        color: obsidian.textMuted, cursor: 'pointer',
+                        padding: `${3 / zoom}px`, display: 'flex',
+                        borderRadius: 3 / zoom,
+                        transition: 'color 0.15s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.color = obsidian.textPrimary}
+                      onMouseLeave={e => e.currentTarget.style.color = obsidian.textMuted}
+                    >
+                      <Plus size={11 / zoom} />
+                    </button>
+                  )}
+                  <button
+                    onMouseDown={e => e.stopPropagation()}
+                    onClick={e => { e.stopPropagation(); deleteCard(card.id); }}
+                    title="Remove"
+                    style={{
+                      background: 'none', border: 'none',
+                      color: obsidian.textMuted, cursor: 'pointer',
+                      padding: `${3 / zoom}px`, display: 'flex',
+                      borderRadius: 3 / zoom,
+                      transition: 'color 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.color = obsidian.dangerColor}
+                    onMouseLeave={e => e.currentTarget.style.color = obsidian.textMuted}
+                  >
+                    <Trash2 size={11 / zoom} />
+                  </button>
                 </div>
               </div>
 
-              {/* ─── Card Body Content ─── */}
-              <div style={{ padding: '8px 10px', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              {/* ─── Color Picker Popover ─── */}
+              {isColorPickerOpen && (
+                <div
+                  onMouseDown={e => e.stopPropagation()}
+                  onClick={e => e.stopPropagation()}
+                  style={{
+                    position: 'absolute',
+                    top: 32 / zoom,
+                    right: 4 / zoom,
+                    background: obsidian.toolbarBg,
+                    border: `${1 / zoom}px solid ${obsidian.toolbarBorder}`,
+                    borderRadius: 8 / zoom,
+                    padding: `${6 / zoom}px ${8 / zoom}px`,
+                    display: 'flex',
+                    gap: 5 / zoom,
+                    zIndex: 20,
+                    boxShadow: obsidian.shadowLg,
+                  }}
+                >
+                  {CARD_COLORS.map((col, idx) => (
+                    <div
+                      key={col.label}
+                      title={col.label}
+                      onClick={() => {
+                        setCardColors(prev => ({ ...prev, [card.id]: idx }));
+                        setColorPickerOpen(null);
+                      }}
+                      style={{
+                        width: 14 / zoom, height: 14 / zoom, borderRadius: '50%',
+                        background: idx === 0 ? 'rgba(255,255,255,0.15)' : col.border,
+                        cursor: 'pointer',
+                        border: colorIdx === idx
+                          ? `${2 / zoom}px solid ${obsidian.textPrimary}`
+                          : `${1 / zoom}px solid rgba(255,255,255,0.08)`,
+                        transition: 'transform 0.1s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.2)'}
+                      onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* ─── Card Body ─── */}
+              <div style={{
+                padding: `${10 / zoom}px ${12 / zoom}px`,
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}>
                 {isNote ? (
                   <div style={{
-                    fontSize: 11.5, color: textSecondary, lineHeight: 1.5,
-                    whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowY: 'auto',
-                    fontFamily: 'Inter, -apple-system, sans-serif',
-                    paddingRight: 4,
-                  }} className="canvas-card-scroll">
-                    {previewLines ? (
-                      previewLines.slice(0, 300) + (previewLines.length > 300 ? '...' : '')
-                    ) : (
-                      <span style={{ color: textMuted, fontStyle: 'italic' }}>Empty note file</span>
+                    fontSize: 12 / zoom,
+                    color: obsidian.textSecondary,
+                    lineHeight: 1.7,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    overflow: 'hidden',
+                    fontFamily: 'inherit',
+                  }}>
+                    {previewLines.slice(0, 280) || (
+                      <span style={{
+                        color: obsidian.textFaint,
+                        fontStyle: 'italic',
+                      }}>
+                        Empty note
+                      </span>
                     )}
                   </div>
                 ) : (
@@ -888,32 +879,55 @@ export function CanvasView() {
                     value={card.content || ''}
                     onChange={e => updateCard(card.id, { content: e.target.value })}
                     onMouseDown={e => e.stopPropagation()}
-                    placeholder="Write anything..."
+                    placeholder="Type here..."
                     style={{
-                      flex: 1, width: '100%', background: 'none', border: 'none', outline: 'none',
-                      color: textPrimary, fontSize: 12, resize: 'none',
-                      fontFamily: 'Inter, -apple-system, sans-serif',
-                      lineHeight: 1.5, minHeight: 60,
-                      padding: 0, margin: 0,
+                      flex: 1,
+                      width: '100%',
+                      background: 'none',
+                      border: 'none',
+                      outline: 'none',
+                      color: obsidian.textPrimary,
+                      fontSize: 12 / zoom,
+                      resize: 'none',
+                      fontFamily: 'inherit',
+                      lineHeight: 1.7,
+                      minHeight: 80 / zoom,
                     }}
                   />
                 )}
               </div>
 
-              {/* ─── Resizing Node Handle (Bottom Right) ─── */}
+              {/* ─── Resize Handle ─── */}
               <div
                 onMouseDown={e => {
-                  e.stopPropagation(); e.preventDefault();
-                  resizeRef.current = { id: card.id, startX: e.clientX, startY: e.clientY, startW: card.w, startH: card.h };
+                  e.stopPropagation();
+                  e.preventDefault();
+                  resizeRef.current = {
+                    id: card.id, startX: e.clientX, startY: e.clientY,
+                    startW: card.w, startH: card.h
+                  };
                 }}
                 style={{
-                  position: 'absolute', bottom: 0, right: 0, width: 14, height: 14,
-                  cursor: 'nwse-resize', zIndex: 12, opacity: hoveredCard === card.id || isSelected ? 0.75 : 0,
-                  transition: 'opacity 0.15s ease', display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end', padding: 2,
+                  position: 'absolute',
+                  bottom: 0, right: 0,
+                  width: 14 / zoom, height: 14 / zoom,
+                  cursor: 'nwse-resize',
+                  zIndex: 10,
+                  opacity: isHovered ? 0.5 : 0,
+                  transition: 'opacity 0.15s ease',
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                  justifyContent: 'flex-end',
+                  padding: 2 / zoom,
                 }}
               >
-                <svg width={7} height={7} viewBox="0 0 10 10">
-                  <path d="M9 1L1 9M9 5L5 9" stroke={textMuted} strokeWidth="1.8" strokeLinecap="round" fill="none" />
+                <svg width={7 / zoom} height={7 / zoom} viewBox="0 0 10 10">
+                  <path
+                    d="M9 1L1 9M9 5L5 9"
+                    stroke={obsidian.textFaint}
+                    strokeWidth="1.5"
+                    fill="none"
+                  />
                 </svg>
               </div>
             </div>
@@ -921,11 +935,14 @@ export function CanvasView() {
         })}
       </div>
 
-      {/* ─── Connection Paths Layer ─── */}
+      {/* ─── SVG Connection Layer ─── */}
       <svg
         style={{
-          position: 'absolute', inset: 0, width: '100%', height: '100%',
-          pointerEvents: 'none', overflow: 'visible', zIndex: 2,
+          position: 'absolute', inset: 0,
+          width: '100%', height: '100%',
+          pointerEvents: 'none',
+          overflow: 'visible',
+          zIndex: 2,
         }}
       >
         <defs>
@@ -934,30 +951,25 @@ export function CanvasView() {
               key={`arrow-${color}`}
               id={`arrow-${color.replace('#', '')}`}
               viewBox="0 0 10 10"
-              refX="1"
-              refY="5"
-              markerWidth={6.5}
-              markerHeight={6.5}
+              refX="0" refY="5"
+              markerWidth={7} markerHeight={7}
               orient="auto-start-reverse"
             >
-              <path d="M 0 1.5 L 8 5 L 0 8.5 Z" fill={color} fillOpacity={0.9} />
+              <path d="M 0 1.5 L 10 5 L 0 8.5 Z" fill={color} fillOpacity={0.75} />
             </marker>
           ))}
           <marker
             id="arrow-drag-preview"
             viewBox="0 0 10 10"
-            refX="1"
-            refY="5"
-            markerWidth={6.5}
-            markerHeight={6.5}
+            refX="0" refY="5"
+            markerWidth={7} markerHeight={7}
             orient="auto-start-reverse"
           >
-            <path d="M 0 1.5 L 8 5 L 0 8.5 Z" fill={accentColor} fillOpacity={0.8} />
+            <path d="M 0 1.5 L 10 5 L 0 8.5 Z" fill={obsidian.accentColor} fillOpacity={0.6} />
           </marker>
         </defs>
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
           {renderConnections()}
-          {/* Connection Drag Preview Path */}
           {connDrag && (() => {
             const fromCard = findCard(connDrag.fromCard);
             if (!fromCard) return null;
@@ -966,11 +978,11 @@ export function CanvasView() {
             return (
               <path
                 d={smartBezier(p1, connDrag.fromSide, p2, connDrag.toSide)}
-                stroke={accentColor}
-                strokeWidth={1.8 / zoom}
-                strokeDasharray={`${6 / zoom} ${3 / zoom}`}
+                stroke={obsidian.accentColor}
+                strokeWidth={1.5 / zoom}
+                strokeDasharray={`${5 / zoom} ${3 / zoom}`}
                 fill="none"
-                strokeOpacity={0.8}
+                strokeOpacity={0.6}
                 markerEnd="url(#arrow-drag-preview)"
                 style={{ pointerEvents: 'none' }}
               />
@@ -979,338 +991,249 @@ export function CanvasView() {
         </g>
       </svg>
 
-      {/* ─── Top Header Actions Panel ─── */}
+      {/* ─── Top Toolbar (Obsidian style) ─── */}
       <div
-        className="flex items-center justify-between"
         style={{
-          position: 'absolute', top: 0, left: 0, right: 0, padding: '10px 16px',
-          background: 'rgba(15,15,17,0.85)', borderBottom: `1px solid #1c1c1f`,
-          backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', zIndex: 30,
+          position: 'absolute',
+          top: 0, left: 0, right: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '6px 12px',
+          background: obsidian.toolbarBg,
+          borderBottom: `1px solid ${obsidian.toolbarBorder}`,
+          zIndex: 10,
+          minHeight: 38,
         }}
       >
-        <div className="flex items-center gap-3">
+        {/* Left group */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <FlintLogo size={14} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: textPrimary, letterSpacing: '0.2px' }}>Obsidian Canvas</span>
           <span style={{
-            fontSize: 10.5, color: textSecondary, background: 'rgba(255,255,255,0.03)',
-            padding: '2px 8px', borderRadius: 4, border: `1px solid #232326`,
+            fontSize: 12, fontWeight: 600,
+            color: obsidian.textSecondary,
+            letterSpacing: '0.02em',
           }}>
-            {filteredCards.length} cards · {wikilinkEdges.length + connections.length} links
+            Canvas
           </span>
+
+          <div style={{
+            height: 16,
+            width: 1,
+            background: obsidian.toolbarBorder,
+            margin: '0 2px',
+          }} />
+
+          {/* Stats badge */}
+          <span style={{
+            fontSize: 10.5,
+            color: obsidian.textMuted,
+            background: 'rgba(255,255,255,0.03)',
+            padding: '2px 8px',
+            borderRadius: 4,
+            border: `1px solid ${obsidian.toolbarBorder}`,
+            fontVariantNumeric: 'tabular-nums',
+          }}>
+            {filteredCards.length} card{filteredCards.length !== 1 ? 's' : ''} · {wikilinkEdges.length + connections.length} link{(wikilinkEdges.length + connections.length) !== 1 ? 's' : ''}
+          </span>
+
+          {/* Add card button */}
+          <button
+            onClick={addTextCard}
+            title="Add text card"
+            style={{
+              background: 'rgba(255,255,255,0.03)',
+              border: `1px solid ${obsidian.inputBorder}`,
+              color: obsidian.textSecondary,
+              cursor: 'pointer',
+              padding: '4px 10px',
+              borderRadius: 5,
+              fontSize: 11,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = obsidian.accentBg;
+              e.currentTarget.style.borderColor = 'rgba(123,111,199,0.35)';
+              e.currentTarget.style.color = obsidian.textPrimary;
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+              e.currentTarget.style.borderColor = obsidian.inputBorder;
+              e.currentTarget.style.color = obsidian.textSecondary;
+            }}
+          >
+            <Plus size={12} />
+            <span>Add card</span>
+          </button>
+
+          {/* Connection color picker */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '4px 8px',
+            background: 'rgba(255,255,255,0.02)',
+            border: `1px solid ${obsidian.inputBorder}`,
+            borderRadius: 5,
+          }}>
+            <span style={{
+              fontSize: 10, color: obsidian.textMuted,
+              marginRight: 2, whiteSpace: 'nowrap',
+            }}>
+              Line
+            </span>
+            {CONN_COLORS.map(color => (
+              <div
+                key={color}
+                onClick={() => setSelectedConnColor(color)}
+                title={`Connection color: ${color}`}
+                style={{
+                  width: 12, height: 12, borderRadius: '50%',
+                  background: color,
+                  cursor: 'pointer',
+                  border: selectedConnColor === color
+                    ? `2px solid ${obsidian.textPrimary}`
+                    : '1px solid rgba(255,255,255,0.08)',
+                  boxShadow: selectedConnColor === color
+                    ? `0 0 4px ${color}`
+                    : 'none',
+                  transition: 'all 0.15s ease',
+                  flexShrink: 0,
+                }}
+              />
+            ))}
+          </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          {/* Search/Filter Box */}
-          <div className="flex items-center gap-2" style={{
-            padding: '5px 10px', background: 'rgba(255,255,255,0.025)',
-            border: `1px solid #232326`, borderRadius: 6,
+        {/* Right group */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Search */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '4px 10px',
+            background: obsidian.inputBg,
+            border: `1px solid ${obsidian.inputBorder}`,
+            borderRadius: 5,
           }}>
-            <Search size={12} style={{ color: textMuted }} />
+            <Search size={12} style={{ color: obsidian.textFaint }} />
             <input
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Filter canvas..."
-              style={{ background: 'none', border: 'none', outline: 'none', color: textPrimary, fontSize: 12, width: 140, fontFamily: 'inherit' }}
+              placeholder="Filter cards..."
+              style={{
+                background: 'none',
+                border: 'none',
+                outline: 'none',
+                color: obsidian.textPrimary,
+                fontSize: 12,
+                width: 130,
+                fontFamily: 'inherit',
+              }}
             />
             {query && (
               <button
                 onClick={() => setQuery('')}
-                style={{ background: 'none', border: 'none', color: textMuted, cursor: 'pointer', padding: 0, display: 'flex' }}
-                onMouseEnter={e => e.currentTarget.style.color = textPrimary}
-                onMouseLeave={e => e.currentTarget.style.color = textMuted}
+                style={{
+                  background: 'none', border: 'none',
+                  color: obsidian.textMuted, cursor: 'pointer',
+                  padding: 0, display: 'flex',
+                }}
+                onMouseEnter={e => e.currentTarget.style.color = obsidian.textPrimary}
+                onMouseLeave={e => e.currentTarget.style.color = obsidian.textMuted}
               >
-                <X size={12} />
+                <X size={11} />
               </button>
             )}
           </div>
 
+          {/* Zoom indicator */}
+          <span style={{
+            fontSize: 10.5,
+            color: obsidian.textMuted,
+            fontVariantNumeric: 'tabular-nums',
+            minWidth: 38,
+            textAlign: 'center',
+          }}>
+            {Math.round(zoom * 100)}%
+          </span>
+
+          {/* Reset */}
+          <button
+            onClick={resetLayout}
+            title="Reset layout"
+            style={{
+              background: 'none', border: 'none',
+              color: obsidian.textMuted, cursor: 'pointer',
+              display: 'flex', alignItems: 'center',
+              padding: '4px 5px', borderRadius: 4,
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.color = obsidian.textPrimary;
+              e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.color = obsidian.textMuted;
+              e.currentTarget.style.background = 'none';
+            }}
+          >
+            <RotateCcw size={13} />
+          </button>
+
+          {/* Close */}
           <button
             onClick={() => dispatch({ type: 'TOGGLE_CANVAS_VIEW' })}
-            style={{ background: 'none', border: 'none', color: textSecondary, cursor: 'pointer', display: 'flex', padding: 5, borderRadius: 4, transition: 'background-color 0.15s' }}
-            onMouseEnter={e => { e.currentTarget.style.color = '#ffffff'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
-            onMouseLeave={e => { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'none'; }}
+            style={{
+              background: 'none', border: 'none',
+              color: obsidian.textMuted, cursor: 'pointer',
+              display: 'flex', padding: 4, borderRadius: 4,
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.color = obsidian.textPrimary;
+              e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.color = obsidian.textMuted;
+              e.currentTarget.style.background = 'none';
+            }}
           >
             <X size={15} />
           </button>
         </div>
       </div>
 
-      {/* ─── Bottom Center Floating Obsidian Toolbar ─── */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 24,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 12,
-          zIndex: 30,
-        }}
-      >
-        {/* Note Adding Search Dropdown Panel (Mounts above button) */}
-        {notePickerOpen && (
-          <div
-            style={{
-              width: 320,
-              background: '#1d1d20',
-              border: '1px solid #333336',
-              borderRadius: 8,
-              boxShadow: '0 12px 36px rgba(0,0,0,0.6)',
-              padding: 10,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-              maxHeight: 280,
-              overflowY: 'auto',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.15)', border: '1px solid #2e2e31', borderRadius: 4, padding: '4px 8px' }}>
-              <Search size={12} style={{ color: textMuted }} />
-              <input
-                autoFocus
-                placeholder="Search note from vault..."
-                value={noteSearch}
-                onChange={e => setNoteSearch(e.target.value)}
-                style={{ background: 'none', border: 'none', outline: 'none', color: textPrimary, fontSize: 11.5, width: '100%' }}
-              />
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto', maxHeight: 200 }} className="canvas-card-scroll">
-              {filteredNotes.length === 0 ? (
-                <div style={{ color: textMuted, fontSize: 11, textAlign: 'center', padding: 12, fontStyle: 'italic' }}>No notes found</div>
-              ) : (
-                filteredNotes.map(note => (
-                  <button
-                    key={note.id}
-                    onClick={() => addNoteCard(note.id)}
-                    style={{
-                      textAlign: 'left',
-                      background: 'none',
-                      border: 'none',
-                      borderRadius: 4,
-                      padding: '6px 8px',
-                      fontSize: 11.5,
-                      color: textSecondary,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      width: '100%',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(127,109,242,0.15)'; e.currentTarget.style.color = '#ffffff'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary; }}
-                  >
-                    <FileText size={11} style={{ color: textMuted }} />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{note.title}</span>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* The main floating control pill */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            background: 'rgba(29, 29, 32, 0.9)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            borderRadius: 9999,
-            padding: '5px 12px',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-          }}
-        >
-          {/* Add Text Card Button */}
-          <button
-            onClick={addTextCard}
-            title="Create Card"
-            style={{
-              background: 'none', border: 'none', color: textSecondary,
-              cursor: 'pointer', padding: '6px 12px', borderRadius: 9999, fontSize: 11.5,
-              fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6,
-              transition: 'background-color 0.15s, color 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.color = '#ffffff'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-            onMouseLeave={e => { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'none'; }}
-          >
-            <Type size={12} />
-            <span>Add Card</span>
-          </button>
-
-          <div style={{ height: 16, width: 1, background: 'rgba(255,255,255,0.08)' }} />
-
-          {/* Add Note Card Button */}
-          <button
-            onClick={() => { setNotePickerOpen(!notePickerOpen); setNoteSearch(''); }}
-            title="Add existing note from your vault"
-            style={{
-              background: 'none', border: 'none', color: textSecondary,
-              cursor: 'pointer', padding: '6px 12px', borderRadius: 9999, fontSize: 11.5,
-              fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6,
-              transition: 'background-color 0.15s, color 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.color = '#ffffff'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-            onMouseLeave={e => { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'none'; }}
-          >
-            <FileText size={12} />
-            <span>Add Note</span>
-          </button>
-
-          <div style={{ height: 16, width: 1, background: 'rgba(255,255,255,0.08)' }} />
-
-          {/* Active drawing line color picker */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px' }}>
-            <span style={{ fontSize: 10, color: textMuted, marginRight: 2 }}>Line:</span>
-            {CONN_COLORS.slice(0, 5).map(color => (
-              <button
-                key={color}
-                onClick={() => setSelectedConnColor(color)}
-                title={`Line color: ${color}`}
-                style={{
-                  width: 12, height: 12, borderRadius: '50%',
-                  background: color, border: selectedConnColor === color ? '1.5px solid #fff' : '1px solid rgba(255,255,255,0.1)',
-                  padding: 0, cursor: 'pointer', transition: 'transform 0.1s ease',
-                }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.2)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-              />
-            ))}
-          </div>
-
-          <div style={{ height: 16, width: 1, background: 'rgba(255,255,255,0.08)' }} />
-
-          {/* Clear Canvas Action */}
-          <button
-            onClick={resetLayout}
-            title="Reset/Clear Canvas"
-            style={{
-              background: 'none', border: 'none', color: '#ff5f5f',
-              cursor: 'pointer', padding: '6px 10px', borderRadius: 9999,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'background-color 0.15s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,95,95,0.15)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'none'}
-          >
-            <RotateCcw size={12} />
-          </button>
-        </div>
-      </div>
-
-      {/* ─── Bottom Right Floating Obsidian Zoom Panel ─── */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 24,
-          right: 24,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-          background: 'rgba(29, 29, 32, 0.9)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          borderRadius: 8,
-          padding: '4px 6px',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          zIndex: 30,
-        }}
-      >
-        {/* Zoom Out */}
-        <button
-          onClick={zoomOut}
-          title="Zoom out"
-          style={{
-            background: 'none', border: 'none', color: textSecondary,
-            cursor: 'pointer', width: 24, height: 24, borderRadius: 4,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
-            transition: 'background-color 0.15s, color 0.15s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.color = '#ffffff'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-          onMouseLeave={e => { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'none'; }}
-        >
-          －
-        </button>
-
-        {/* Zoom level label */}
-        <span style={{
-          fontSize: 10.5, fontWeight: 600, color: textSecondary,
-          fontVariantNumeric: 'tabular-nums', width: 42, textAlign: 'center',
-        }}>
-          {Math.round(zoom * 100)}%
-        </span>
-
-        {/* Zoom In */}
-        <button
-          onClick={zoomIn}
-          title="Zoom in"
-          style={{
-            background: 'none', border: 'none', color: textSecondary,
-            cursor: 'pointer', width: 24, height: 24, borderRadius: 4,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
-            transition: 'background-color 0.15s, color 0.15s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.color = '#ffffff'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-          onMouseLeave={e => { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'none'; }}
-        >
-          ＋
-        </button>
-
-        <div style={{ height: 14, width: 1, background: 'rgba(255,255,255,0.08)', margin: '0 3px' }} />
-
-        {/* Centering view / reset zoom */}
-        <button
-          onClick={resetZoom}
-          title="Reset zoom & fit"
-          style={{
-            background: 'none', border: 'none', color: textSecondary,
-            cursor: 'pointer', width: 24, height: 24, borderRadius: 4,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transition: 'background-color 0.15s, color 0.15s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.color = '#ffffff'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-          onMouseLeave={e => { e.currentTarget.style.color = textSecondary; e.currentTarget.style.background = 'none'; }}
-        >
-          <RotateCcw size={11} />
-        </button>
-      </div>
-
-      {/* ─── Bottom Keyboard Shortcut Helper Panel ─── */}
+      {/* ─── Bottom Hints ─── */}
       <div style={{
-        position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
-        fontSize: 9.5, color: textMuted, display: 'flex', gap: 8, pointerEvents: 'none', whiteSpace: 'nowrap', zIndex: 10,
-        background: 'rgba(15,15,17,0.35)', padding: '2px 8px', borderRadius: 4, backdropFilter: 'blur(4px)',
+        position: 'absolute',
+        bottom: 10,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        fontSize: 10,
+        color: obsidian.textFaint,
+        display: 'flex',
+        gap: 8,
+        pointerEvents: 'none',
+        whiteSpace: 'nowrap',
+        zIndex: 5,
+        opacity: 0.7,
+        letterSpacing: '0.01em',
       }}>
-        <span>Scroll to pan</span> <span>·</span>
-        <span>Ctrl+Scroll to zoom</span> <span>·</span>
-        <span>Drag header to move card</span> <span>·</span>
-        <span>Drag side dots to connect</span> <span>·</span>
-        <span>ESC to cancel/deselect</span>
+        <span>Scroll to pan</span>
+        <span style={{ opacity: 0.4 }}>·</span>
+        <span>Ctrl+Scroll to zoom</span>
+        <span style={{ opacity: 0.4 }}>·</span>
+        <span>Drag header to move</span>
+        <span style={{ opacity: 0.4 }}>·</span>
+        <span>Drag dot to connect</span>
+        <span style={{ opacity: 0.4 }}>·</span>
+        <span>Esc to cancel</span>
       </div>
-
-      {/* ─── Global Scrollbar CSS Styling injection ─── */}
-      <style>{`
-        .canvas-card-scroll::-webkit-scrollbar {
-          width: 4px;
-          height: 4px;
-        }
-        .canvas-card-scroll::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .canvas-card-scroll::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.08);
-          border-radius: 999px;
-        }
-        .canvas-card-scroll::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.15);
-        }
-      `}</style>
     </div>
   );
 }
