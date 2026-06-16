@@ -178,6 +178,12 @@ interface LineContextMenu {
   y: number;
 }
 
+interface CardContextMenu {
+  cardId: string;
+  x: number;
+  y: number;
+}
+
 // ─── Sub-Component for drag & drop Image cards ──────────────────────────────
 
 interface ImageCardBodyProps {
@@ -359,14 +365,12 @@ export function CanvasView() {
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null);
   
-  // Custom right click line context menu state
+  // Custom right click context menus state
   const [lineContextMenu, setLineContextMenu] = useState<LineContextMenu | null>(null);
+  const [cardContextMenu, setCardContextMenu] = useState<CardContextMenu | null>(null);
   
   // Dynamic Option Toggles
   const [showArrows, setShowArrows] = useState(true);
-  
-  // Selection box state for marquee framing
-  const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; currX: number; currY: number } | null>(null);
   
   // Note adding dropdown
   const [notePickerOpen, setNotePickerOpen] = useState(false);
@@ -384,17 +388,6 @@ export function CanvasView() {
   const workspace = activeVaultId ? state.vaultData[activeVaultId] : null;
   const cards = workspace?.canvasCards || [];
 
-  // Frame Rendering Layer Sort: frames are sorted to index 0 so they naturally sit in the background
-  const sortedCards = useMemo(() => {
-    return [...cards].sort((a, b) => {
-      const aIsFrame = a.id.startsWith('frame');
-      const bIsFrame = b.id.startsWith('frame');
-      if (aIsFrame && !bIsFrame) return -1;
-      if (!aIsFrame && bIsFrame) return 1;
-      return 0;
-    });
-  }, [cards]);
-
   const [cardColors, setCardColors] = useState<Record<string, number>>(() => {
     try {
       const raw = localStorage.getItem(`flint-canvas-colors-${activeVaultId || 'default'}`);
@@ -411,14 +404,17 @@ export function CanvasView() {
     } catch {}
   }, [cardColors, activeVaultId]);
 
-  // Close context menu on any outside click
+  // Close context menus on any outside click
   useEffect(() => {
-    const closeMenu = () => setLineContextMenu(null);
-    window.addEventListener('click', closeMenu);
-    window.addEventListener('contextmenu', closeMenu);
+    const closeMenus = () => {
+      setLineContextMenu(null);
+      setCardContextMenu(null);
+    };
+    window.addEventListener('click', closeMenus);
+    window.addEventListener('contextmenu', closeMenus);
     return () => {
-      window.removeEventListener('click', closeMenu);
-      window.removeEventListener('contextmenu', closeMenu);
+      window.removeEventListener('click', closeMenus);
+      window.removeEventListener('contextmenu', closeMenus);
     };
   }, []);
 
@@ -478,9 +474,9 @@ export function CanvasView() {
   });
 
   const filteredCards = useMemo(() => {
-    if (!query.trim()) return sortedCards;
+    if (!query.trim()) return cards;
     const q = query.toLowerCase();
-    return sortedCards.filter(card => {
+    return cards.filter(card => {
       if (card.type === 'note' && card.noteId) {
         const note = state.notes.find(n => n.id === card.noteId);
         return note && (
@@ -490,7 +486,7 @@ export function CanvasView() {
       }
       return card.content?.toLowerCase().includes(q);
     });
-  }, [sortedCards, query, state.notes]);
+  }, [cards, query, state.notes]);
 
   const wikilinkEdges = useMemo(() => {
     const filteredIds = new Set(filteredCards.map(c => c.id));
@@ -596,7 +592,7 @@ export function CanvasView() {
         setColorPickerOpen(null);
         setNotePickerOpen(false);
         setLineContextMenu(null);
-        setSelectionBox(null);
+        setCardContextMenu(null);
       }
       
       // Delete card with Backspace or Delete
@@ -646,7 +642,7 @@ export function CanvasView() {
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (dragRef.current) {
-      // Dragging card or Frame
+      // Dragging card or Frame (Smooth movement!)
       const targetId = dragRef.current.id;
       const isFrame = targetId.startsWith('frame');
       
@@ -690,17 +686,11 @@ export function CanvasView() {
         h: Math.max(80, newH)
       });
     } else if (canvasDragRef.current) {
-      // Panning Canvas via Middle Click/Right Click dragging
+      // Panning Canvas (Left click empty background dragging - Ultra smooth!)
       setPan({
         x: e.clientX - canvasDragRef.current.x,
         y: e.clientY - canvasDragRef.current.y,
       });
-    } else if (selectionBox) {
-      // Dragging selection box marquee
-      const rect = containerRef.current!.getBoundingClientRect();
-      const currX = (e.clientX - rect.left - pan.x) / zoom;
-      const currY = (e.clientY - rect.top - pan.y) / zoom;
-      setSelectionBox(prev => prev ? { ...prev, currX, currY } : null);
     } else if (connDragRef.current) {
       // Dragging connection line
       const rect = containerRef.current!.getBoundingClientRect();
@@ -720,35 +710,6 @@ export function CanvasView() {
   };
 
   const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (selectionBox) {
-      // Complete marquee frame selection!
-      const minX = Math.min(selectionBox.startX, selectionBox.currX);
-      const maxX = Math.max(selectionBox.startX, selectionBox.currX);
-      const minY = Math.min(selectionBox.startY, selectionBox.currY);
-      const maxY = Math.max(selectionBox.startY, selectionBox.currY);
-      
-      const width = maxX - minX;
-      const height = maxY - minY;
-      
-      // Create a Frame around notes if marquee size is valid
-      if (width > 30 && height > 30) {
-        pushHistorySnapshot();
-        const frameId = `frame-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-        const newFrame: CanvasCard = {
-          id: frameId,
-          type: 'text', // Safe standard typing
-          content: 'Frame Group', // Name label
-          x: Math.round(minX / 20) * 20,
-          y: Math.round(minY / 20) * 20,
-          w: Math.round(width / 20) * 20,
-          h: Math.round(height / 20) * 20,
-        };
-        updateCards([...cards, newFrame]);
-        setSelectedCard(frameId);
-      }
-      setSelectionBox(null);
-    }
-    
     if (connDragRef.current) {
       const rect = containerRef.current!.getBoundingClientRect();
       const mx = (e.clientX - rect.left - pan.x) / zoom;
@@ -782,17 +743,9 @@ export function CanvasView() {
     setSelectedCard(null);
     setNotePickerOpen(false);
     
-    if (e.button === 0) {
-      // Left Click on Empty Canvas -> Draw Selection Marquee / Frame!
-      const rect = containerRef.current!.getBoundingClientRect();
-      const mx = (e.clientX - rect.left - pan.x) / zoom;
-      const my = (e.clientY - rect.top - pan.y) / zoom;
-      setSelectionBox({ startX: mx, startY: my, currX: mx, currY: my });
-    } else if (e.button === 1 || e.button === 2) {
-      // Middle or Right Click on Empty Canvas -> Drag-Pan the board!
-      canvasDragRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
-      if (containerRef.current) containerRef.current.style.cursor = 'grabbing';
-    }
+    // Left click, middle click, or right click on background now pans the canvas seamlessly!
+    canvasDragRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+    if (containerRef.current) containerRef.current.style.cursor = 'grabbing';
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -958,24 +911,6 @@ export function CanvasView() {
         }}
         onMouseDown={handleCanvasMouseDown}
       >
-        {/* Selection Marquee Frame Visual Render */}
-        {selectionBox && (
-          <div
-            style={{
-              position: 'absolute',
-              left: Math.min(selectionBox.startX, selectionBox.currX),
-              top: Math.min(selectionBox.startY, selectionBox.currY),
-              width: Math.abs(selectionBox.currX - selectionBox.startX),
-              height: Math.abs(selectionBox.currY - selectionBox.startY),
-              border: `1.5px dashed ${accentColor}`,
-              background: 'rgba(127, 109, 242, 0.08)',
-              borderRadius: 4,
-              zIndex: 99,
-              pointerEvents: 'none',
-            }}
-          />
-        )}
-
         {/* Card and Frame node maps */}
         {filteredCards.map(card => {
           const isNote = card.type === 'note';
@@ -1087,7 +1022,18 @@ export function CanvasView() {
                 }
               }}
               onMouseEnter={() => setHoveredCard(card.id)}
-              onMouseLeave={() => setHoveredCard(null)}
+              onMouseLeave={() => { setHoveredCard(null); }}
+              // Right-Click on Card opens custom Context Menu to change colors or delete card!
+              onContextMenu={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                setSelectedCard(card.id);
+                setCardContextMenu({
+                  cardId: card.id,
+                  x: e.clientX,
+                  y: e.clientY,
+                });
+              }}
             >
               {/* ─── Connection Anchor Dots (Visible on hover; Frame cards don't have anchor dots!) ─── */}
               {!isFrame && edges.map(side => (
@@ -1127,102 +1073,7 @@ export function CanvasView() {
                 </>
               )}
 
-              {/* ─── Floating Card Context Menu (Centered above selected card) ─── */}
-              {isSelected && (
-                <div
-                  onMouseDown={e => e.stopPropagation()}
-                  onClick={e => e.stopPropagation()}
-                  style={{
-                    position: 'absolute',
-                    top: -46 / zoom,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    background: '#1d1d20',
-                    border: '1px solid #2e2e31',
-                    borderRadius: 6,
-                    padding: '4px 6px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    zIndex: 25,
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                    pointerEvents: 'auto',
-                  }}
-                >
-                  {/* Color presets */}
-                  <div style={{ display: 'flex', gap: 4, paddingRight: 4, borderRight: '1px solid #2e2e31' }}>
-                    {CARD_COLORS.map((col, idx) => (
-                      <button
-                        key={col.label}
-                        title={col.label}
-                        onClick={() => {
-                          pushHistorySnapshot();
-                          setCardColors(prev => ({ ...prev, [card.id]: idx }));
-                        }}
-                        style={{
-                          width: 14,
-                          height: 14,
-                          borderRadius: '50%',
-                          background: idx === 0 ? 'rgba(255,255,255,0.15)' : col.border,
-                          cursor: 'pointer',
-                          border: colorIdx === idx ? '1.5px solid #ffffff' : '1px solid rgba(255,255,255,0.05)',
-                          boxShadow: colorIdx === idx ? `0 0 6px ${col.border}` : 'none',
-                          padding: 0,
-                          transition: 'transform 0.1s ease',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.15)'}
-                        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-                      />
-                    ))}
-                  </div>
-
-                  {/* Quick Action Buttons */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    {isNote && (
-                      <button
-                        onClick={() => dispatch({ type: 'OPEN_TAB', payload: card.noteId! })}
-                        title="Open full note file"
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: textSecondary,
-                          cursor: 'pointer',
-                          padding: 4,
-                          borderRadius: 4,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#ffffff'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = textSecondary; }}
-                      >
-                        <Plus size={13} />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => deleteCard(card.id)}
-                      title="Delete card"
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: '#ff5f5f',
-                        cursor: 'pointer',
-                        padding: 4,
-                        borderRadius: 4,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,95,95,0.12)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* ─── Card Header (Dragging is handled here) ─── */}
+              {/* ─── Card Header (Dragging is handled here - smooth and precise!) ─── */}
               <div
                 onMouseDown={e => {
                   e.stopPropagation();
@@ -1496,6 +1347,86 @@ export function CanvasView() {
                     borderRadius: '50%',
                     background: color,
                     border: '1px solid rgba(255,255,255,0.08)',
+                    cursor: 'pointer',
+                    padding: 0,
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+                    transition: 'transform 0.1s ease',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.2)'}
+                  onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Custom Right-Click Context Menu for Note, Text, and PNG Cards ─── */}
+      {cardContextMenu && (
+        <div
+          style={{
+            position: 'fixed',
+            left: cardContextMenu.x,
+            top: cardContextMenu.y,
+            background: '#1c1c1e',
+            border: '1px solid #2e2e31',
+            borderRadius: 6,
+            boxShadow: '0 12px 36px rgba(0,0,0,0.6)',
+            padding: '4px 0',
+            width: 175,
+            zIndex: 200,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Option 1: Remove Card */}
+          <button
+            onClick={() => {
+              deleteCard(cardContextMenu.cardId);
+              setCardContextMenu(null);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              width: '100%',
+              background: 'none',
+              border: 'none',
+              color: '#ff5f5f',
+              padding: '7px 12px',
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: 'pointer',
+              textAlign: 'left',
+              fontFamily: 'inherit',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,95,95,0.1)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'none'}
+          >
+            <Trash2 size={12} />
+            <span>Delete card</span>
+          </button>
+
+          <div style={{ height: 1, background: '#2e2e31', margin: '4px 0' }} />
+
+          {/* Option 2: Change Card Outline Color Preset */}
+          <div style={{ padding: '6px 12px' }}>
+            <span style={{ fontSize: 10.5, color: textSecondary, fontWeight: 500, display: 'block', marginBottom: 6 }}>Change card color</span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 5 }}>
+              {CARD_COLORS.map((col, idx) => (
+                <button
+                  key={col.label}
+                  onClick={() => {
+                    pushHistorySnapshot();
+                    setCardColors(prev => ({ ...prev, [cardContextMenu.cardId]: idx }));
+                    setCardContextMenu(null);
+                  }}
+                  title={`Card color: ${col.label}`}
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    background: idx === 0 ? 'rgba(255,255,255,0.15)' : col.border,
+                    border: cardColors[cardContextMenu.cardId] === idx ? '2px solid #ffffff' : '1px solid rgba(255,255,255,0.08)',
                     cursor: 'pointer',
                     padding: 0,
                     boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
@@ -1859,9 +1790,9 @@ export function CanvasView() {
         fontSize: 9.5, color: textMuted, display: 'flex', gap: 8, pointerEvents: 'none', whiteSpace: 'nowrap', zIndex: 10,
         background: 'rgba(15,15,17,0.35)', padding: '2px 8px', borderRadius: 4, backdropFilter: 'blur(4px)',
       }}>
-        <span>Drag Empty Canvas to Frame Select</span> <span>·</span>
-        <span>Right-Click/Middle-Click Drag to Pan</span> <span>·</span>
-        <span>Right-Click line for menu</span> <span>·</span>
+        <span>Left-Click Drag Empty Board to Pan</span> <span>·</span>
+        <span>Drag Header to Move Card</span> <span>·</span>
+        <span>Right-Click card or line for settings</span> <span>·</span>
         <span>Ctrl+Z to Undo</span> <span>·</span>
         <span>ESC to cancel</span>
       </div>
