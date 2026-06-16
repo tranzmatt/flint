@@ -53,7 +53,7 @@ export function SettingsPanel() {
   const [ollamaStatus, setOllamaStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const [agentUp, setAgentUp] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [customModel, setCustomModel] = useState('');
+  
   const isCredentialProvider = state.aiSettings.provider === 'openai' || state.aiSettings.provider === 'gemini' || state.aiSettings.provider === 'openai-compatible';
   const isLocalProvider = state.aiSettings.provider === 'local-gguf';
   const isApiProvider = isCredentialProvider;
@@ -163,12 +163,7 @@ export function SettingsPanel() {
     setRefreshing(false);
   };
 
-  const applyCustomModel = () => {
-    if (customModel.trim()) {
-      dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { model: customModel.trim() } });
-      setCustomModel('');
-    }
-  };
+  
 
   const checkConnection = async () => {
     await refreshModels();
@@ -305,17 +300,23 @@ export function SettingsPanel() {
             <FlintLogo size={14} />
             <span style={{ fontSize: 14, fontWeight: 600, color: '#d5dbe5' }}>Settings</span>
           </div>
-          <button onClick={close} style={{ background: 'none', border: 'none', color: '#768193', cursor: 'pointer', display: 'flex' }}
+          <button 
+            onClick={close} 
+            aria-label="Close settings"
+            style={{ background: 'none', border: 'none', color: '#768193', cursor: 'pointer', display: 'flex' }}
             onMouseEnter={e => { e.currentTarget.style.color = '#d2d8e2'; }}
             onMouseLeave={e => { e.currentTarget.style.color = '#768193'; }}>
-            <X size={16} />
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
 
         {/* Tabs */}
         <div className="flex" style={{ borderBottom: '1px solid #303744', background: '#161a20' }}>
           {(['editor', 'ai', 'vault', 'about'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)}
+            <button 
+              key={t} 
+              onClick={() => setTab(t)}
+              aria-label={`${t === 'ai' ? 'AI' : t} settings`}
               style={{
                 flex: 1, padding: '10px', background: 'none', border: 'none', cursor: 'pointer',
                 fontSize: 12, fontWeight: 500, textTransform: 'capitalize',
@@ -334,12 +335,23 @@ export function SettingsPanel() {
           {tab === 'editor' && (
             <div className="flex flex-col gap-5">
               <SettingRow icon={<Type size={14} />} label="Font size" value={`${settings.fontSize}px`}>
-                <input type="range" min={10} max={24} value={settings.fontSize}
+                <label htmlFor="font-size-slider" className="sr-only">Font size in pixels, between 10 and 24</label>
+                <input 
+                  id="font-size-slider"
+                  type="range" 
+                  min={10} 
+                  max={24} 
+                  value={settings.fontSize}
+                  aria-label="Font size"
                   onChange={e => setSettings(s => ({ ...s, fontSize: parseInt(e.target.value) }))}
                   style={{ flex: 1, accentColor: '#666' }} />
               </SettingRow>
               <SettingRow icon={<Type size={14} />} label="App theme">
-                <select value={settings.theme}
+                <label htmlFor="theme-select" className="sr-only">Select application theme</label>
+                <select 
+                  id="theme-select"
+                  value={settings.theme}
+                  aria-label="Application theme"
                   onChange={e => setSettings(s => ({ ...s, theme: e.target.value as Settings['theme'] }))}
                   style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }}>
                   <option value="dark">Dark</option>
@@ -351,7 +363,15 @@ export function SettingsPanel() {
                 </select>
               </SettingRow>
               <SettingRow icon={<Hash size={14} />} label="Tab size" value={`${settings.tabSize}`}>
-                <input type="range" min={2} max={8} step={2} value={settings.tabSize}
+                <label htmlFor="tab-size-slider" className="sr-only">Tab size in spaces, between 2 and 8</label>
+                <input 
+                  id="tab-size-slider"
+                  type="range" 
+                  min={2} 
+                  max={8} 
+                  step={2} 
+                  value={settings.tabSize}
+                  aria-label="Tab size"
                   onChange={e => setSettings(s => ({ ...s, tabSize: parseInt(e.target.value) }))}
                   style={{ flex: 1, accentColor: '#666' }} />
               </SettingRow>
@@ -422,7 +442,12 @@ export function SettingsPanel() {
 
               {state.aiSettings.provider === 'ollama' && (
                 <SettingRow icon={<Wifi size={14} />} label="Ollama URL">
-                  <input type="text" value={state.aiSettings.ollamaUrl}
+                  <label htmlFor="ollama-url" className="sr-only">Ollama server URL</label>
+                  <input 
+                    id="ollama-url"
+                    type="text" 
+                    value={state.aiSettings.ollamaUrl}
+                    aria-label="Ollama URL"
                     onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { ollamaUrl: e.target.value } })}
                     style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }} />
                 </SettingRow>
@@ -430,7 +455,12 @@ export function SettingsPanel() {
 
               {isApiProvider && (
                 <SettingRow icon={<Brain size={14} />} label="API key">
-                  <input type="password" value={state.aiSettings.apiKey}
+                  <label htmlFor="api-key" className="sr-only">API key for authentication</label>
+                  <input 
+                    id="api-key"
+                    type="password" 
+                    value={state.aiSettings.apiKey}
+                    aria-label="API key"
                     onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { apiKey: e.target.value } })}
                     placeholder={state.aiSettings.provider === 'openai' ? 'sk-...' : state.aiSettings.provider === 'gemini' ? 'AIza...' : 'Paste provider key'}
                     style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }} />
@@ -439,7 +469,12 @@ export function SettingsPanel() {
 
               {isOpenAICompatible && (
                 <SettingRow icon={<Globe size={14} />} label="API base URL">
-                  <input type="text" value={state.aiSettings.apiBaseUrl}
+                  <label htmlFor="api-base-url" className="sr-only">API base URL for the provider</label>
+                  <input 
+                    id="api-base-url"
+                    type="text" 
+                    value={state.aiSettings.apiBaseUrl}
+                    aria-label="API base URL"
                     onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { apiBaseUrl: e.target.value } })}
                     placeholder="https://api.provider.com/v1"
                     style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }} />

@@ -17,7 +17,7 @@ export function StatusBar() {
         <span>{chars} chars</span>
         {state.hasFolderHandle && activeVault?.isFolderVault && (
           <span className="flex items-center gap-1" style={{ color: 'var(--accent)' }}>
-            <HardDrive size={10} /> {activeVault.folderPath}
+            <HardDrive size={10} aria-hidden="true" /> {activeVault.folderPath}
           </span>
         )}
       </div>

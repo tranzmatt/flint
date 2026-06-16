@@ -19,11 +19,13 @@ export function TabBar() {
             <span style={{ flex: 1, fontSize: 11, color: active ? 'var(--text)' : 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
               {note.title}
             </span>
-            <button onClick={e => { e.stopPropagation(); dispatch({ type: 'CLOSE_TAB', payload: tabId }); }}
+            <button 
+              aria-label={`Close tab: ${note.title}`}
+              onClick={e => { e.stopPropagation(); dispatch({ type: 'CLOSE_TAB', payload: tabId }); }}
               style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: 2, display: 'flex', borderRadius: 4 }}
               onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
               onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-dim)'; e.currentTarget.style.background = 'none'; }}>
-              <X size={11} />
+              <X size={11} aria-hidden="true" />
             </button>
           </div>
         );

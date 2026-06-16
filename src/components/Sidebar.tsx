@@ -30,28 +30,44 @@ export function Sidebar() {
 
       {/* Search */}
       <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
+        <label htmlFor="sidebar-search" className="sr-only">Search notes in sidebar</label>
         <div className="flex items-center gap-2" style={{ padding: '6px 8px', background: 'var(--bg-deep)', border: '1px solid var(--border)', borderRadius: 7, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02)' }}>
-          <Search size={12} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
-          <input type="text" placeholder="Search notes..." value={search} onChange={e => setSearch(e.target.value)}
+          <Search size={12} style={{ color: 'var(--text-dim)', flexShrink: 0 }} aria-hidden="true" />
+          <input 
+            id="sidebar-search"
+            type="text" 
+            placeholder="Search notes..." 
+            value={search} 
+            onChange={e => setSearch(e.target.value)}
+            aria-label="Filter notes by title"
             style={{ flex: 1, background: 'none', border: 'none', color: 'var(--text)', fontSize: 12, outline: 'none' }} />
         </div>
       </div>
 
       {/* Actions */}
       <div className="flex items-center gap-1" style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
-        <button onClick={() => createNote()} title="New note"
+        <button 
+          onClick={() => createNote()} 
+          title="New note"
+          aria-label="Create a new note"
           style={{ padding: '4px 9px', background: 'var(--bg-elevated)', border: '1px solid var(--border-light)', color: 'var(--text-secondary)', fontSize: 11, borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-focus)'; e.currentTarget.style.color = 'var(--text)'; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
           <Plus size={11} /> Note
         </button>
-        <button onClick={() => setShowNewFolder(true)} title="New folder"
+        <button 
+          onClick={() => setShowNewFolder(true)} 
+          title="New folder"
+          aria-label="Create a new folder"
           style={{ padding: '4px 9px', background: 'var(--bg-elevated)', border: '1px solid var(--border-light)', color: 'var(--text-secondary)', fontSize: 11, borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-focus)'; e.currentTarget.style.color = 'var(--text)'; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
           <FolderPlus size={11} /> Folder
         </button>
-        <button onClick={() => openDailyNote()} title="Daily note"
+        <button 
+          onClick={() => openDailyNote()} 
+          title="Daily note"
+          aria-label="Open or create today's daily note"
           style={{ padding: '4px 9px', background: 'var(--bg-elevated)', border: '1px solid var(--border-light)', color: 'var(--text-secondary)', fontSize: 11, borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-focus)'; e.currentTarget.style.color = 'var(--text)'; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
@@ -95,7 +111,9 @@ export function Sidebar() {
           const isRenaming = renamingFolderId === folder.id;
           return (
             <div key={folder.id}>
-              <div className="flex items-center gap-1 cursor-pointer"
+              <div 
+                className="flex items-center gap-1 cursor-pointer"
+                aria-label={folder.name}
                 style={{ padding: '4px 12px', color: '#666', fontSize: 12 }}
                 onClick={() => !isRenaming && dispatch({ type: 'TOGGLE_FOLDER', payload: folder.id })}
                 onContextMenu={e => { e.preventDefault(); setCtx({ type: 'folder', id: folder.id, x: e.clientX, y: e.clientY }); }}>
@@ -156,7 +174,9 @@ export function Sidebar() {
 
       {/* Context menu */}
       {ctx && (
-        <div style={{ position: 'fixed', left: ctx.x, top: ctx.y, zIndex: 300, background: '#111', border: '1px solid #222', borderRadius: 6, padding: '4px 0', minWidth: 140, boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}
+        <div 
+          aria-label={ctx.type === 'note' ? 'Note options' : 'Folder options'}
+          style={{ position: 'fixed', left: ctx.x, top: ctx.y, zIndex: 300, background: '#111', border: '1px solid #222', borderRadius: 6, padding: '4px 0', minWidth: 140, boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}
           className="animate-scale-in">
           {ctx.type === 'note' && (
             <>
@@ -188,6 +208,9 @@ function NoteItem({ note, active, indented, renaming, onClick, onContext, onRena
 
   return (
     <div className="flex items-center gap-2 cursor-pointer"
+      role="treeitem"
+      aria-selected={active}
+      tabIndex={active ? 0 : -1}
       draggable={!renaming}
       style={{ padding: '5px 12px', paddingLeft: indented ? 28 : 12, background: active ? '#232934' : 'transparent', borderLeft: active ? '2px solid #93a4c0' : '2px solid transparent', transition: 'all 0.08s' }}
       onClick={() => !renaming && onClick()}
@@ -195,7 +218,7 @@ function NoteItem({ note, active, indented, renaming, onClick, onContext, onRena
       onContextMenu={onContext}
       onMouseEnter={e => { if (!active && !renaming) e.currentTarget.style.background = '#1d222b'; }}
       onMouseLeave={e => { if (!active && !renaming) e.currentTarget.style.background = 'transparent'; }}>
-      <FileText size={13} style={{ color: active ? '#c7d1de' : '#7b8698', flexShrink: 0 }} />
+      <FileText size={13} style={{ color: active ? '#c7d1de' : '#7b8698', flexShrink: 0 }} aria-hidden="true" />
       {renaming ? (
         <RenameInput initialValue={note.title} onSave={onRename!} onCancel={onCancelRename!} />
       ) : (
@@ -240,12 +263,13 @@ function RenameInput({ initialValue, onSave, onCancel }: { initialValue: string;
 
 function CtxItem({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void; }) {
   return (
-    <div className="flex items-center gap-2 cursor-pointer"
-      style={{ padding: '5px 12px', fontSize: 12, color: '#999', transition: 'background 0.08s' }}
+    <button 
+      className="flex items-center gap-2 cursor-pointer"
+      style={{ padding: '5px 12px', fontSize: 12, color: '#999', transition: 'background 0.08s', background: 'transparent', border: 'none', width: '100%', textAlign: 'left' }}
       onClick={onClick}
       onMouseEnter={e => { e.currentTarget.style.background = '#1a1a1a'; }}
       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
       {icon} {label}
-    </div>
+    </button>
   );
 }

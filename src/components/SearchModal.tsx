@@ -17,30 +17,42 @@ export function SearchModal() {
   useEffect(() => { setIdx(0); }, [query]);
 
   return (
-    <div className="fixed inset-0 animate-fade-in" style={{ zIndex: 150, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 80 }}
-      onClick={() => dispatch({ type: 'TOGGLE_SEARCH' })}>
-      <div className="animate-scale-in" style={{ width: 480, background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 8, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}
+    <div 
+      className="fixed inset-0 animate-fade-in" 
+      style={{ zIndex: 150, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 80 }}
+      onClick={() => dispatch({ type: 'TOGGLE_SEARCH' })}
+      role="presentation">
+      <div 
+        className="animate-scale-in" 
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search notes"
+        style={{ width: 480, background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 8, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2" style={{ padding: '10px 14px', borderBottom: '1px solid #1a1a1a' }}>
-          <Search size={14} style={{ color: '#444' }} />
-          <input ref={inputRef} type="text" placeholder="Search all notes..." value={query}
+          <Search size={14} style={{ color: '#444' }} aria-hidden="true" />
+          <label htmlFor="search-input" className="sr-only">Search all notes</label>
+          <input 
+            id="search-input"
+            ref={inputRef} 
+            type="text" 
+            placeholder="Search all notes..." 
+            value={query}
+            aria-label="Search query"
             onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(i + 1, results.length - 1)); }
-              if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(i - 1, 0)); }
-              if (e.key === 'Enter' && results[idx]) { dispatch({ type: 'OPEN_TAB', payload: results[idx].id }); dispatch({ type: 'TOGGLE_SEARCH' }); }
-              if (e.key === 'Escape') dispatch({ type: 'TOGGLE_SEARCH' });
-            }}
             style={{ flex: 1, background: 'none', border: 'none', color: '#bbb', fontSize: 14, outline: 'none' }} />
         </div>
-        <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+        <div 
+          id="search-results"
+          style={{ maxHeight: 300, overflowY: 'auto' }}>
           {results.length === 0 && query.trim() && (
             <div style={{ padding: '16px 14px', color: '#333', fontSize: 13 }}>No results found</div>
           )}
-          {results.map((note, i) => (
-            <div key={note.id} className="flex items-center gap-2 cursor-pointer"
-              style={{ padding: '8px 14px', background: i === idx ? '#141414' : 'transparent', borderLeft: i === idx ? '2px solid #666' : '2px solid transparent', transition: 'all 0.08s' }}
-              onMouseEnter={() => setIdx(i)}
+          {results.map((note) => (
+            <div 
+              key={note.id} 
+              className="flex items-center gap-2 cursor-pointer"
+              style={{ padding: '8px 14px', background: 'transparent', borderLeft: '2px solid transparent', transition: 'all 0.08s' }}
               onClick={() => { dispatch({ type: 'OPEN_TAB', payload: note.id }); dispatch({ type: 'TOGGLE_SEARCH' }); }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, color: '#bbb' }}>{note.title}</div>
@@ -51,7 +63,7 @@ export function SearchModal() {
             </div>
           ))}
         </div>
-        <div style={{ padding: '6px 14px', borderTop: '1px solid #1a1a1a', fontSize: 10, color: '#333', display: 'flex', gap: 12 }}>
+        <div style={{ padding: '6px 14px', borderTop: '1px solid #1a1a1a', fontSize: 10, color: '#333', display: 'flex', gap: 12 }} aria-hidden="true">
           <span>↑↓ Navigate</span><span>↵ Open</span><span>Esc Close</span>
         </div>
       </div>
