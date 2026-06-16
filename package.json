@@ -2,7 +2,7 @@
   "name": "flint",
   "productName": "Flint",
   "description": "Local AI Knowledge Base",
-  "version": "1.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
