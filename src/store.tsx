@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, useEffect, useRef, useCallback, type ReactNode } from 'react';
-import type { Note, Folder, Vault, AppState, ChatMessage, AISettings, VaultWorkspace } from './types';
+import type { Note, Folder, Vault, AppState, ChatMessage, AISettings, VaultWorkspace, CanvasCard } from './types';
 
 const STORAGE_KEY = 'flint-data';
 const SUPPORTED_AI_PROVIDERS = ['ollama', 'openai', 'gemini', 'openai-compatible', 'local-gguf'] as const;
@@ -584,7 +584,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const note: Note = {
       id: generateId(),
       title,
-      content: `# ${title}\n\n<< [[${yesterdayTitle}]] | [[${tomorrowTitle}]] >>\n\n## 🎯 Focus for Today\n- [ ] \n\n## 📝 Notes\n\n\n## ✅ Completed\n\n\n## 💭 Reflection\n\n`,
+      content: `# ${title}\n\n<< [[${yesterdayTitle}]] | [[${tomorrowTitle}]] >>\n\n## Focus for Today\n- [ ] \n\n## Notes\n\n\n## Completed\n\n\n## Reflection\n\n`,
       folderId,
       pinned: false,
       createdAt: Date.now(),
