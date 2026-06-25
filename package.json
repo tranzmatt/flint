@@ -13,6 +13,10 @@
     "package": "node scripts/build-app.js"
   },
   "dependencies": {
+    "@tiptap/pm": "^3.27.1",
+    "@tiptap/react": "^3.27.1",
+    "@tiptap/starter-kit": "^3.27.1",
+    "@tiptap/suggestion": "^3.27.1",
     "clsx": "2.1.1",
     "lucide-react": "^1.8.0",
     "react": "19.2.3",
@@ -20,7 +24,9 @@
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
-    "tailwind-merge": "3.4.0"
+    "tailwind-merge": "3.4.0",
+    "tippy.js": "^6.3.7",
+    "tiptap-markdown": "^0.9.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.17",

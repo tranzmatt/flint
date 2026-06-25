@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, useEffect, useRef, useCallback, type ReactNode } from 'react';
-import type { Note, Folder, Vault, AppState, ChatMessage, AISettings, VaultWorkspace, CanvasCard } from './types';
+import type { Note, Folder, Vault, AppState, ChatMessage, AISettings, VaultWorkspace, CanvasCard, FlintSettings } from './types';
 
 const STORAGE_KEY = 'flint-data';
 const SUPPORTED_AI_PROVIDERS = ['ollama', 'openai', 'gemini', 'openai-compatible', 'local-gguf'] as const;
@@ -19,6 +19,22 @@ const DEFAULT_AI_SETTINGS: AISettings = {
   internetAccess: true,
   systemPrompt: 'You are Flint AI, an intelligent assistant embedded in the Flint note-taking app. You have access to the user\'s notes as your memory. Use this knowledge to provide helpful, contextual answers. When referencing notes, mention them by name. Think carefully based on the connected notes.',
 };
+
+const DEFAULT_SETTINGS: FlintSettings = {
+  fontSize: 14, spellCheck: false, autoSave: true, showLineNumbers: false, tabSize: 2, wordWrap: true, theme: 'dark', editorStyle: 'split'
+};
+
+function normalizeSettings(raw: unknown): FlintSettings {
+  const partial = (typeof raw === 'object' && raw !== null ? raw : {}) as Partial<FlintSettings>;
+  let base = { ...DEFAULT_SETTINGS, ...partial };
+  try {
+    if (!raw) {
+      const ls = localStorage.getItem('flint-settings');
+      if (ls) base = { ...base, ...JSON.parse(ls) };
+    }
+  } catch {}
+  return base;
+}
 
 function generateId() { return Math.random().toString(36).substring(2, 11) + Date.now().toString(36); }
 
@@ -152,6 +168,7 @@ function loadState(): AppState | null {
         aiMessages: parsed.aiMessages || [],
         aiSettings: normalizeAISettings(parsed.aiSettings),
         hasFolderHandle: false,
+        appSettings: normalizeSettings(parsed.appSettings),
       };
       return syncActiveVaultState(baseState);
     }
@@ -406,6 +423,7 @@ function getInitialState(): AppState {
     aiMessages: [],
     aiSettings: DEFAULT_AI_SETTINGS,
     hasFolderHandle: false,
+    appSettings: normalizeSettings(null),
   };
 }
 
@@ -441,7 +459,8 @@ type Action =
   | { type: 'IMPORT_NOTES'; payload: { notes: Note[]; folders: Folder[] } }
   | { type: 'SET_FOLDER_HANDLE'; payload: boolean }
   | { type: 'CREATE_FOLDER_VAULT'; payload: { id: string; name: string; color: string; folderPath: string } }
-  | { type: 'UPDATE_CANVAS_CARDS'; payload: CanvasCard[] };
+  | { type: 'UPDATE_CANVAS_CARDS'; payload: CanvasCard[] }
+  | { type: 'UPDATE_SETTINGS'; payload: Partial<FlintSettings> };
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -517,6 +536,11 @@ function reducer(state: AppState, action: Action): AppState {
     case 'ADD_AI_MESSAGE': return { ...state, aiMessages: [...state.aiMessages, action.payload] };
     case 'CLEAR_AI_MESSAGES': return { ...state, aiMessages: [] };
     case 'UPDATE_AI_SETTINGS': return { ...state, aiSettings: { ...state.aiSettings, ...action.payload } };
+    case 'UPDATE_SETTINGS': {
+      const newSettings = { ...state.appSettings, ...action.payload };
+      try { localStorage.setItem('flint-settings', JSON.stringify(newSettings)); } catch {}
+      return { ...state, appSettings: newSettings };
+    }
     case 'IMPORT_NOTES': return updateCurrentWorkspace(state, workspace => ({ ...workspace, ...buildWorkspace(action.payload.notes, action.payload.folders, [action.payload.notes[0]?.id].filter(Boolean) as string[], action.payload.notes[0]?.id || null, workspace.hasFolderHandle) }));
     case 'SET_FOLDER_HANDLE': return updateCurrentWorkspace(state, workspace => ({ ...workspace, hasFolderHandle: action.payload }));
     case 'CREATE_FOLDER_VAULT': {

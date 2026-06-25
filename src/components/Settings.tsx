@@ -3,51 +3,14 @@ import { useStore } from '../store';
 import { FlintLogo, FlintLogoLarge } from './FlintLogo';
 import { X, Type, Save, AlignLeft, Hash, WrapText, CheckSquare, Download, Upload, Trash2, Info, Brain, Wifi, WifiOff, RefreshCw, Globe, FolderOpen, FolderPlus } from 'lucide-react';
 import { fetchOllamaModels, checkOllamaStatus, checkAgentStatus } from '../services/ollama';
-import type { Note, Folder } from '../types';
-
-interface Settings {
-  fontSize: number;
-  spellCheck: boolean;
-  autoSave: boolean;
-  showLineNumbers: boolean;
-  tabSize: number;
-  wordWrap: boolean;
-  theme: 'dark' | 'light' | 'rose' | 'ocean' | 'forest' | 'amber';
-}
-
-const SETTINGS_KEY = 'flint-settings';
-const DEFAULT_SETTINGS: Settings = {
-  fontSize: 14, spellCheck: false, autoSave: true, showLineNumbers: false, tabSize: 2, wordWrap: true, theme: 'dark',
-};
-
-function loadSettings(): Settings {
-  try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<Settings> & { theme?: string };
-      const themeMap: Record<string, Settings['theme']> = {
-        graphite: 'dark',
-        sunset: 'amber',
-        ocean: 'ocean',
-        forest: 'forest',
-        dark: 'dark',
-        light: 'light',
-        rose: 'rose',
-        amber: 'amber',
-      };
-      return { ...DEFAULT_SETTINGS, ...parsed, theme: themeMap[parsed.theme || 'dark'] || 'dark' };
-    }
-  } catch { /* ignore */ }
-  return DEFAULT_SETTINGS;
-}
-
-function saveSettings(s: Settings) {
-  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch { /* ignore */ }
-}
+import type { Note, Folder, FlintSettings } from '../types';
 
 export function SettingsPanel() {
   const { state, dispatch } = useStore();
-  const [settings, setSettings] = useState<Settings>(loadSettings());
+  const settings = state.appSettings;
+  const setSettings = (updater: (s: FlintSettings) => FlintSettings) => {
+    dispatch({ type: 'UPDATE_SETTINGS', payload: updater(settings) });
+  };
   const [tab, setTab] = useState<'editor' | 'ai' | 'vault' | 'about'>('editor');
   const [models, setModels] = useState<string[]>([]);
   const [ollamaStatus, setOllamaStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
@@ -60,7 +23,7 @@ export function SettingsPanel() {
   const isOpenAICompatible = state.aiSettings.provider === 'openai-compatible';
   const localModelLabel = state.aiSettings.localModelPath.split(/[\\/]/).pop() || 'model.gguf';
 
-  useEffect(() => { saveSettings(settings); }, [settings]);
+
 
   useEffect(() => {
     const style = document.getElementById('flint-dynamic-style');
@@ -352,7 +315,7 @@ export function SettingsPanel() {
                   id="theme-select"
                   value={settings.theme}
                   aria-label="Application theme"
-                  onChange={e => setSettings(s => ({ ...s, theme: e.target.value as Settings['theme'] }))}
+                  onChange={e => setSettings(s => ({ ...s, theme: e.target.value as FlintSettings['theme'] }))}
                   style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }}>
                   <option value="dark">Dark</option>
                   <option value="light">Light</option>
@@ -386,6 +349,18 @@ export function SettingsPanel() {
               </SettingRow>
               <SettingRow icon={<AlignLeft size={14} />} label="Line numbers">
                 <Toggle checked={settings.showLineNumbers} onChange={v => setSettings(s => ({ ...s, showLineNumbers: v }))} />
+              </SettingRow>
+              <SettingRow icon={<Type size={14} />} label="Editor Style">
+                <label htmlFor="editor-style-select" className="sr-only">Select editor style</label>
+                <select 
+                  id="editor-style-select"
+                  value={settings.editorStyle}
+                  aria-label="Editor Style"
+                  onChange={e => setSettings(s => ({ ...s, editorStyle: e.target.value as 'split' | 'tiptap' }))}
+                  style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }}>
+                  <option value="split">Classic (Split-pane)</option>
+                  <option value="tiptap">Tiptap (WYSIWYG)</option>
+                </select>
               </SettingRow>
             </div>
           )}

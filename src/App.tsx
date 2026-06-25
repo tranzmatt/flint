@@ -4,6 +4,7 @@ import { Sidebar } from './components/Sidebar';
 import { TabBar } from './components/TabBar';
 import { Editor } from './components/Editor';
 import { Preview } from './components/Preview';
+import { TiptapEditor } from './components/TiptapEditor';
 import { GraphView } from './components/GraphView';
 import { CanvasView } from './components/CanvasView';
 import { SearchModal } from './components/SearchModal';
@@ -196,7 +197,7 @@ function AppContent() {
               <div className="flex items-center px-4 shrink-0" style={{ height: 38, borderBottom: '1px solid var(--border)', background: 'linear-gradient(180deg, var(--bg-elevated), var(--bg-base))' }}>
                 <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', flex: 1 }}>{activeNote.title}</span>
                 <div className="flex items-center gap-1">
-                  {([
+                  {state.appSettings.editorStyle !== 'tiptap' && ([
                     { mode: 'edit' as const, icon: <PenLine size={13} />, label: 'Edit' },
                     { mode: 'split' as const, icon: <Columns2 size={13} />, label: 'Split' },
                     { mode: 'preview' as const, icon: <Eye size={13} />, label: 'Preview' },
@@ -244,15 +245,23 @@ function AppContent() {
 
               {/* Content */}
               <div className="flex-1 min-h-0 flex">
-                {(viewMode === 'edit' || viewMode === 'split') && (
-                  <div className={viewMode === 'split' ? 'w-1/2' : 'flex-1'} style={{ borderRight: viewMode === 'split' ? '1px solid var(--border)' : 'none', overflow: 'auto', background: 'var(--bg-base)' }}>
-                    <Editor noteId={activeNoteId} />
+                {state.appSettings.editorStyle === 'tiptap' ? (
+                  <div className="flex-1" style={{ overflow: 'auto', background: 'var(--bg-base)' }}>
+                    <TiptapEditor noteId={activeNoteId} />
                   </div>
-                )}
-                {(viewMode === 'preview' || viewMode === 'split') && (
-                  <div className={viewMode === 'split' ? 'w-1/2' : 'flex-1'} style={{ overflow: 'auto', background: 'var(--bg-base)' }}>
-                    <Preview noteId={activeNoteId} />
-                  </div>
+                ) : (
+                  <>
+                    {(viewMode === 'edit' || viewMode === 'split') && (
+                      <div className={viewMode === 'split' ? 'w-1/2' : 'flex-1'} style={{ borderRight: viewMode === 'split' ? '1px solid var(--border)' : 'none', overflow: 'auto', background: 'var(--bg-base)' }}>
+                        <Editor noteId={activeNoteId} />
+                      </div>
+                    )}
+                    {(viewMode === 'preview' || viewMode === 'split') && (
+                      <div className={viewMode === 'split' ? 'w-1/2' : 'flex-1'} style={{ overflow: 'auto', background: 'var(--bg-base)' }}>
+                        <Preview noteId={activeNoteId} />
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

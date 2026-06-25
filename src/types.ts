@@ -56,6 +56,8 @@ export interface FlintSettings {
   showLineNumbers: boolean;
   tabSize: number;
   wordWrap: boolean;
+  theme: 'dark' | 'light' | 'rose' | 'ocean' | 'forest' | 'amber';
+  editorStyle: 'split' | 'tiptap';
 }
 
 export interface ChatMessage {
@@ -114,4 +116,5 @@ export interface AppState {
   aiMessages: ChatMessage[];
   aiSettings: AISettings;
   hasFolderHandle: boolean; // whether current vault has a live folder handle
+  appSettings: FlintSettings;
 }
