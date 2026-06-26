@@ -67,8 +67,9 @@ Requirements:
 - Optional local Python agent
 - Uses your notes as memory
 - Can read graph connections for more context
-- Works with Ollama, local GGUF files, and configured API providers
+- currently Works with Ollama only
 - Can search Wikipedia when internet access is enabled
+>- under development 
 - Note-editing actions for supported requests
 
 ### Local First
