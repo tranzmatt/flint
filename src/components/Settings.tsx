@@ -482,8 +482,9 @@ export function SettingsPanel() {
                   <select value={state.aiSettings.model}
                     onChange={e => dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { model: e.target.value } })}
                     style={{ flex: 1, background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 4, padding: '5px 8px', color: '#aaa', fontSize: 12, outline: 'none' }}>
-                    <option value="llama3.2:latest">llama3.2:latest</option>
-                    {models.filter(m => m.includes('llama3.2') && m !== 'llama3.2:latest').map(m => <option key={m} value={m}>{m}</option>)}
+                    {models.length === 0
+                      ? <option value="">No models found — run: ollama pull</option>
+                      : models.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
                 </div>
               </SettingRow>
