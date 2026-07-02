@@ -1,6 +1,3 @@
-// Flint Electron desktop wrapper.
-// .cjs keeps this file CommonJS regardless of package module settings.
-
 const { app, BrowserWindow, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
