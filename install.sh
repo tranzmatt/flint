@@ -37,8 +37,16 @@ have() { command -v "$1" >/dev/null 2>&1; }
 ask() {
   local prompt="$1"
   local default="$2"
-  local answer
-  read -p "      $prompt [$(if [ "$default" = "y" ]; then echo "Y/n"; else echo "y/N"; fi)]: " answer
+     local answer=""
+  
+   if [ ! -t 0 ]; then
+     answer="$default"
+   elif [ -r /dev/tty ]; then
+     read -r -p "      $prompt [$(if [ \"$default\" = \"y\" ]; then echo \"Y/n\"; else echo \"y/N\"; fi)]: " answer </dev/tty || answer="$default"
+   else
+     read -r -p "      $prompt [$(if [ \"$default\" = \"y\" ]; then echo \"Y/n\"; else echo \"y/N\"; fi)]: " answer || answer="$default"
+   fi
+   
   answer="${answer:-$default}"
   if [[ "$answer" =~ ^[Yy]$ ]]; then
     return 0
