@@ -78,16 +78,13 @@ export interface AIAction {
   content?: string;
 }
 
-export type AIProvider = 'ollama' | 'openai' | 'gemini' | 'openai-compatible' | 'local-gguf';
+export type AIProvider = 'ollama' | 'openai' | 'gemini' | 'openai-compatible';
 
 export interface AISettings {
   provider: AIProvider;
   ollamaUrl: string;
   apiKey: string;
   apiBaseUrl: string;
-  localModelPath: string;
-  localModelContext: number;
-  localModelThreads: number;
   maxOutputTokens: number;
   model: string;
   maxContextNotes: number;
