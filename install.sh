@@ -198,15 +198,12 @@ install_agent() {
     say "      Creating Python virtual environment..."
     "$PYTHON_CMD" -m venv "$FLINT_VENV" || { warn "Failed to create venv. Using system pip."; FLINT_VENV=""; }
     
-    local pip_cmd
-    if [ -n "$FLINT_VENV" ]; then
+    say "      Installing agent requirements..."
+   "$FLINT_VENV/bin/pip" install -q -r "$FLINT_HOME/agent/requirements.txt" || warn "Python packages were not installed. Install requirements manually for AI."
       pip_cmd="$FLINT_VENV/bin/pip"
     else
-      pip_cmd="$PYTHON_CMD -m pip install --user"
+     "$PYTHON_CMD" -m pip install --user -q -r "$FLINT_HOME/agent/requirements.txt" || warn "Python packages were not installed. Install requirements manually for AI."
     fi
-
-    say "      Installing agent requirements..."
-    $pip_cmd install -q -r "$FLINT_HOME/agent/requirements.txt" || warn "Python packages were not installed. Install requirements manually for AI."
     ok "Agent dependencies installed"
   fi
 }
