@@ -7,6 +7,8 @@
   ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue?style=flat-square)
 </div>
 
+>[!IMPORTANT]
+>Currently the `main` branch contains a glitch, so download the latest release `2.0.2.7` and install it with the scripts. 
 # ***Flint***
 - Flint is a secure, local-first knowledge base with markdown notes, linked-note navigation, a visual graph, an infinite canvas, and optional AI assistance through local services.
 
